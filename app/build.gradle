@@ -218,6 +218,9 @@ tasks.register('verifyPackagedJdkAsset') {
     }
 }
 
-tasks.named('assembleDebug').configure {
-    finalizedBy tasks.named('verifyPackagedJdkAsset')
+// Register the APK verification lazily: Android Gradle Plugin creates variant tasks later.
+tasks.configureEach {
+    if (name == 'assembleDebug') {
+        finalizedBy tasks.named('verifyPackagedJdkAsset')
+    }
 }
