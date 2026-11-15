@@ -98,6 +98,7 @@ public class MainActivity extends Activity {
         addTool(toolbar, "Redo", v -> redo());
         addTool(toolbar, "Device", v -> showDeviceInfo());
         addTool(toolbar, "Install JDK", v -> installBundledJdk());
+        addTool(toolbar, "Libraries", v -> installJavaProjectLibraries());
         addTool(toolbar, "Run", v -> runCurrentProject());
         toolbarScroll.addView(toolbar);
         root.addView(toolbarScroll);
@@ -457,6 +458,66 @@ public class MainActivity extends Activity {
         return java.isFile() && javac.isFile();
     }
 
+    private File getJavaLibrariesDirectory() {
+        return new File(getFilesDir(), "java-libs");
+    }
+
+    private void installJavaProjectLibraries() {
+        status.setText("Installing offline Java libraries…");
+        new Thread(() -> {
+            String message;
+            boolean ok = false;
+            try {
+                int count = ensureJavaLibrariesInstalled();
+                message = count + " offline Java library JAR files are ready.\n\n" +
+                        "Use imports such as com.google.gson.Gson, " +
+                        "org.apache.commons.lang3.StringUtils, okhttp3.OkHttpClient, " +
+                        "org.h2.Driver, and org.slf4j.Logger.";
+                ok = true;
+            } catch (Exception e) {
+                message = "Library installation failed: " + e.getMessage();
+            }
+            final boolean success = ok;
+            final String result = message;
+            runOnUiThread(() -> {
+                status.setText(success ? "Offline Java libraries installed" : "Java library installation failed");
+                new android.app.AlertDialog.Builder(this)
+                        .setTitle(success ? "Java Libraries Ready" : "Library Error")
+                        .setMessage(result)
+                        .setPositiveButton("OK", null).show();
+            });
+        }, "Java-Library-Installer").start();
+    }
+
+    private int ensureJavaLibrariesInstalled() throws Exception {
+        String[] assets = getAssets().list("java-libs");
+        if (assets == null || assets.length == 0) {
+            throw new IllegalStateException("No bundled JAR files found in APK assets.");
+        }
+        File destination = getJavaLibrariesDirectory();
+        if (!destination.exists() && !destination.mkdirs()) {
+            throw new IllegalStateException("Cannot create Java library folder.");
+        }
+        int copied = 0;
+        byte[] buffer = new byte[32 * 1024];
+        for (String name : assets) {
+            if (!name.endsWith(".jar")) continue;
+            File target = new File(destination, name);
+            if (target.isFile() && target.length() > 0) continue;
+            try (InputStream input = getAssets().open("java-libs/" + name);
+                 FileOutputStream output = new FileOutputStream(target)) {
+                int read;
+                while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+            }
+            copied++;
+        }
+        File[] installed = destination.listFiles((dir, name) -> name.endsWith(".jar"));
+        if (installed == null || installed.length == 0) {
+            throw new IllegalStateException("No Java JAR libraries were installed.");
+        }
+        return installed.length;
+    }
+
     private void installBundledJdk() {
         if (isJdkInstalled()) {
             status.setText("OpenJDK 21 is already extracted");
@@ -654,6 +715,9 @@ public class MainActivity extends Activity {
             try {
                 saveCurrentBeforeSwitch();
                 if (currentUri != null) throw new IllegalStateException("Run a Java file saved inside Workspace. Use Save As into Workspace first.");
+                ensureJavaLibrariesInstalled();
+                File libraryDirectory = getJavaLibrariesDirectory();
+                String libraryClasspath = new File(libraryDirectory, "*").getAbsolutePath();
                 List<File> sources = new ArrayList<>();
                 collectJavaFiles(workspace, sources);
                 if (sources.isEmpty()) throw new IllegalStateException("No .java source files found in Workspace.");
@@ -662,6 +726,8 @@ public class MainActivity extends Activity {
                 List<String> compileArgs = new ArrayList<>();
                 compileArgs.add("-encoding");
                 compileArgs.add("UTF-8");
+                compileArgs.add("-classpath");
+                compileArgs.add(libraryClasspath);
                 compileArgs.add("-d");
                 compileArgs.add(classes.getAbsolutePath());
                 for (File source : sources) compileArgs.add(source.getAbsolutePath());
@@ -678,7 +744,7 @@ public class MainActivity extends Activity {
                         currentFile.getName().substring(0, currentFile.getName().length() - 5);
                 String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
                 String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-Dfile.encoding=UTF-8",
-                        "-cp", classes.getAbsolutePath(), mainClass);
+                        "-cp", classes.getAbsolutePath() + File.pathSeparator + libraryClasspath, mainClass);
                 success = true;
                 report = "BUILD SUCCESSFUL\n" + sources.size() + " Java source file(s) compiled.\n\n" +
                         "RUN: " + mainClass + "\n\n" + (runOutput.isEmpty() ? "(Program finished with no output)" : runOutput);
