@@ -998,8 +998,17 @@ public class MainActivity extends Activity {
                 deleteTree(staging);
                 if (!staging.mkdirs()) throw new IllegalStateException("Cannot create JDK folder");
                 try (InputStream raw = openBundledJdkArchive();
-                     GzipCompressorInputStream gzip = new GzipCompressorInputStream(raw);
-                     TarArchiveInputStream tar = new TarArchiveInputStream(gzip)) {
+                     java.io.PushbackInputStream probe = new java.io.PushbackInputStream(raw, 2)) {
+                    int first = probe.read();
+                    int second = probe.read();
+                    if (second >= 0) probe.unread(second);
+                    if (first >= 0) probe.unread(first);
+                    // Depending on Android asset packaging, .tar.gz may be
+                    // delivered as a decompressed .tar entry. Detect the bytes,
+                    // not just the filename, before choosing the input stream.
+                    InputStream payload = (first == 0x1f && second == 0x8b)
+                            ? new GzipCompressorInputStream(probe) : probe;
+                    try (TarArchiveInputStream tar = new TarArchiveInputStream(payload)) {
                     TarArchiveEntry entry;
                     byte[] buffer = new byte[64 * 1024];
                     while ((entry = tar.getNextTarEntry()) != null) {
@@ -1031,6 +1040,7 @@ public class MainActivity extends Activity {
                             }
                             if ((entry.getMode() & 0111) != 0) output.setExecutable(true, false);
                         }
+                    }
                     }
                 }
                 File home = findJdkHome(staging, 0);
