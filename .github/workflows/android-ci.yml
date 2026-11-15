@@ -31,7 +31,7 @@ jobs:
           for (const asset of ['codemirror.min.js', 'codemirror.min.css', 'material-darker.min.css']) {
             if (!fs.existsSync('app/src/main/assets/ide/' + asset)) throw new Error('Missing IDE asset: ' + asset);
           }
-          const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+          const scripts = html.split('<script>').slice(1).map(part => part.split('</script>')[0]);
           if (!scripts.length) throw new Error('No inline IDE controller script found');
           for (const script of scripts) new vm.Script(script[1]);
           console.log('CodeMirror assets and inline controller syntax verified');
