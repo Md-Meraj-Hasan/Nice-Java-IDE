@@ -485,17 +485,17 @@ public class MainActivity extends Activity {
                         String lower = target.getName().toLowerCase(java.util.Locale.ROOT);
                         String starter = "";
                         if (lower.endsWith(".html") || lower.endsWith(".htm")) {
-                            starter = "<!doctype html>\\n<html><head><meta charset=\\\"UTF-8\\\"><title>Nice Web Project</title><link rel=\\\"stylesheet\\\" href=\\\"style.css\\\"></head><body><h1>Hello Web!</h1><script src=\\\"app.js\\\"></script></body></html>\\n";
+                            starter = "<!doctype html>\n<html><head><meta charset=\"UTF-8\"><title>Nice Web Project</title><link rel=\"stylesheet\" href=\"style.css\"></head><body><h1>Hello Web!</h1><script src=\"app.js\"></script></body></html>\n";
                         } else if (lower.endsWith(".css")) {
-                            starter = "body {\\n  font-family: sans-serif;\\n}\\n";
+                            starter = "body {\n  font-family: sans-serif;\n}\n";
                         } else if (lower.endsWith(".js")) {
-                            starter = "console.log('Hello JavaScript!');\\n";
+                            starter = "console.log('Hello JavaScript!');\n";
                         } else if (lower.endsWith(".kt")) {
                             starter = "fun main() {\n    println(\"Hello from Nice Kotlin IDE!\")\n}\n";
                         } else if (lower.endsWith(".kts")) {
                             starter = "println(\"Hello from Kotlin Script!\")\n";
                         } else if (lower.endsWith(".java")) {
-                            starter = "public class " + target.getName().substring(0, target.getName().length() - 5) + " {\\n    public static void main(String[] args) {\\n        System.out.println(\\\"Hello Java!\\\");\\n    }\\n}\\n";
+                            starter = "public class " + target.getName().substring(0, target.getName().length() - 5) + " {\n    public static void main(String[] args) {\n        System.out.println(\"Hello Java!\");\n    }\n}\n";
                         }
                         writeText(target, starter);
                         openWorkspaceFile(target);
