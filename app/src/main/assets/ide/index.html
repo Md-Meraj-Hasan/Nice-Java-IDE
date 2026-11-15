@@ -39,7 +39,7 @@ window.saveFile=function(){sync();if(window.NativeIDE)NativeIDE.save()};
 window.openFile=function(){if(window.NativeIDE)NativeIDE.open()};
 window.newFile=function(){if(window.NativeIDE)NativeIDE.newFile()};
 window.undo=function(){editor.undo()};window.redo=function(){editor.redo()};
-window.findText=function(){let q=prompt('Find text');if(q){let c=editor.getSearchCursor(q);if(c.findNext()){editor.setSelection(c.from(),c.to());editor.focus()}}};
+window.findText=function(){let q=prompt('Find text');if(q){let at=editor.getValue().indexOf(q);if(at>=0){let from=editor.posFromIndex(at),to=editor.posFromIndex(at+q.length);editor.setSelection(from,to);editor.focus()}else document.getElementById('status').textContent='Text not found'}};
 window.insert=function(v){editor.replaceSelection(v);editor.focus()};
 window.toggleKeyboard=function(){let k=document.getElementById('keyboard');k.style.display=k.style.display==='none'?'block':'none';editor.refresh()};
 document.getElementById('themeBtn').onclick=function(){document.body.classList.toggle('light');editor.setOption('theme',document.body.classList.contains('light')?'default':'material-darker')};
