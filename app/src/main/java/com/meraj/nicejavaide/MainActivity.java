@@ -18,6 +18,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.concurrent.TimeUnit;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -635,11 +638,77 @@ public class MainActivity extends Activity {
     }
 
     private void showEngineStatus() {
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("OpenJDK 21 integration in progress")
-                .setMessage("The editor can open and save Java files. Offline javac/java execution will be enabled after the bundled ARM64 JDK passes Android runtime checks.")
-                .setPositiveButton("OK", null)
-                .show();
+        if (!isJdkInstalled()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("OpenJDK 21 is not installed")
+                    .setMessage("First tap Install JDK. The bundled toolchain is extracted offline into app storage.")
+                    .setPositiveButton("Install JDK", (dialog, which) -> installBundledJdk())
+                    .setNegativeButton("Cancel", null).show();
+            return;
+        }
+        status.setText("Testing OpenJDK 21 native execution…");
+        new Thread(() -> {
+            String report;
+            boolean passed = false;
+            File testDir = new File(getFilesDir(), "jdk-runtime-test");
+            try {
+                deleteTree(testDir);
+                if (!testDir.mkdirs()) throw new IllegalStateException("Cannot create runtime test folder");
+                String javaVersion = runJdkCommand(new File(jdkHome, "bin/java"), "-version");
+                String javacVersion = runJdkCommand(new File(jdkHome, "bin/javac"), "-version");
+                File source = new File(testDir, "HelloNice.java");
+                writeText(source, "public class HelloNice { public static void main(String[] a) { System.out.println(\\"NICE_JAVA_RUNTIME_OK\\"); } }");
+                String compileOutput = runJdkCommand(new File(jdkHome, "bin/javac"), "-d", testDir.getAbsolutePath(), source.getAbsolutePath());
+                String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-cp", testDir.getAbsolutePath(), "HelloNice");
+                if (!runOutput.contains("NICE_JAVA_RUNTIME_OK")) throw new IllegalStateException("Compiled program output did not match expected result: " + runOutput);
+                passed = true;
+                report = "OpenJDK 21 native test: PASSED\\n\\n" + javaVersion + "\\n" + javacVersion +
+                        "\\nCompile: successful\\nRun output: NICE_JAVA_RUNTIME_OK";
+            } catch (Exception e) {
+                report = "OpenJDK 21 native test: FAILED\\n\\n" + e.getClass().getSimpleName() + ": " + e.getMessage();
+            } finally {
+                deleteTree(testDir);
+            }
+            final boolean ok = passed;
+            final String result = report;
+            runOnUiThread(() -> {
+                status.setText(ok ? "OpenJDK 21 native runtime test passed" : "OpenJDK 21 runtime test failed");
+                new android.app.AlertDialog.Builder(this).setTitle(ok ? "JDK Runtime Ready" : "JDK Runtime Test Failed")
+                        .setMessage(result).setPositiveButton("OK", null).show();
+            });
+        }, "Jdk21-Runtime-Test").start();
+    }
+
+    private String runJdkCommand(File executable, String... args) throws Exception {
+        if (!executable.isFile() || !executable.canExecute()) {
+            throw new IllegalStateException("JDK executable is missing or not executable: " + executable.getAbsolutePath());
+        }
+        List<String> command = new ArrayList<>();
+        command.add(executable.getAbsolutePath());
+        java.util.Collections.addAll(command, args);
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(getFilesDir());
+        builder.redirectErrorStream(true);
+        java.util.Map<String, String> env = builder.environment();
+        env.put("JAVA_HOME", jdkHome.getAbsolutePath());
+        env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
+        String lib = new File(jdkHome, "lib").getAbsolutePath();
+        String server = new File(jdkHome, "lib/server").getAbsolutePath();
+        env.put("LD_LIBRARY_PATH", server + ":" + lib + ":" + env.get("LD_LIBRARY_PATH"));
+        Process process = builder.start();
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) output.append(line).append('\\n');
+        }
+        if (!process.waitFor(30, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            throw new IllegalStateException("JDK command timed out after 30 seconds: " + executable.getName());
+        }
+        if (process.exitValue() != 0) {
+            throw new IllegalStateException(executable.getName() + " exited with code " + process.exitValue() + ": " + output);
+        }
+        return output.toString().trim();
     }
 
     private void addOpenTab(File file) {
