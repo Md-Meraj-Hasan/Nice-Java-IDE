@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Nice Java IDE</title><link rel="stylesheet" href="codemirror.min.css"><link rel="stylesheet" href="material-darker.min.css">
+<style>
+:root{color-scheme:dark;--bg:#090e18;--panel:#111a2a;--panel2:#172338;--line:#26364d;--txt:#e6edf7;--muted:#91a3bb;--blue:#3978f6;--green:#29c477}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--txt);font:14px system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
+.app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.header{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#0d1523;border-bottom:1px solid var(--line);flex-shrink:0}
+.brand{font-size:18px;font-weight:750;letter-spacing:.2px}.brand span{color:#70a2ff}.header-actions{display:flex;gap:8px}
+button{font:inherit;color:var(--txt);border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:8px 11px;min-height:36px}
+button:active{filter:brightness(1.2)}button.primary{background:var(--blue);border-color:var(--blue);font-weight:700}button.run{background:#126b4b;border-color:#19865f;color:#fff;font-weight:700}
+.menu{display:flex;gap:6px;padding:8px 10px;background:var(--panel);overflow-x:auto;flex-shrink:0}.menu button{background:transparent;border-color:transparent;color:#b7c5d8;padding:6px 12px;min-height:32px}
+.toolbar{display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0d1523;border-bottom:1px solid var(--line);overflow-x:auto;flex-shrink:0}.toolbar button{white-space:nowrap;padding:6px 10px;min-height:34px}
+.filebar{height:39px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#101a2a;border-bottom:1px solid var(--line);flex-shrink:0;color:#9fb5d5}
+.file-dot{width:8px;height:8px;border-radius:50%;background:#67a0ff}.file-name{font-weight:650;color:#d9e5f7}
+.editor-wrap{flex:1;min-height:0;overflow:hidden;background:#151b25}.CodeMirror{height:100%;font:14px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;background:#151b25;color:#e4eaf4}.CodeMirror-gutters{background:#151b25;border-right:1px solid #273246}.CodeMirror-linenumber{color:#64748b}.CodeMirror-lines{padding:12px 0}.CodeMirror pre{padding-left:5px}
+.keyboard{background:#101a2a;border-top:1px solid var(--line);padding:7px 7px calc(7px + env(safe-area-inset-bottom));flex-shrink:0}
+.keys{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}.keys+.keys{margin-top:6px}.keys button{min-width:35px;padding:7px 9px;min-height:34px;font:13px ui-monospace,monospace;background:#1b2940;border-color:#30425d}
+.status{height:25px;display:flex;align-items:center;padding:0 12px;color:#91a3bb;font-size:11px;background:#0b1320;border-top:1px solid var(--line);flex-shrink:0}
+body.light{--bg:#f2f5fa;--panel:#e7edf6;--panel2:#fff;--line:#cbd5e1;--txt:#182235;--muted:#526176}
+body.light .header,body.light .toolbar,body.light .status{background:#e9eff8}body.light .filebar{background:#f7f9fc}body.light .editor-wrap,body.light .CodeMirror,body.light .CodeMirror-gutters{background:#fff;color:#172033}
+body.light .CodeMirror-gutters{border-color:#dbe2ec}
+</style></head><body><main class="app">
+<header class="header"><div class="brand">Nice<span>Java</span> IDE</div><div class="header-actions"><button id="themeBtn">☼</button><button class="run" onclick="runCode()">▶ Run</button></div></header>
+<nav class="menu"><button onclick="newFile()">File</button><button onclick="saveFile()">Save</button><button onclick="openFile()">Open</button><button onclick="undo()">Undo</button><button onclick="redo()">Redo</button><button onclick="toggleKeyboard()">⌨ Keys</button></nav>
+<section class="toolbar"><button onclick="newFile()">＋ New</button><button onclick="saveFile()">💾 Save</button><button onclick="openFile()">📂 Open</button><button onclick="undo()">↶</button><button onclick="redo()">↷</button><button onclick="findText()">⌕ Find</button><button class="run" onclick="runCode()">▶ Run</button></section>
+<div class="filebar"><span class="file-dot"></span><span class="file-name" id="fileName">Main.java</span><span style="margin-left:auto;color:#8094b0">JAVA</span></div>
+<div class="editor-wrap"><textarea id="source"></textarea></div>
+<div class="keyboard" id="keyboard"><div class="keys"><button onclick="insert('    ')">Tab</button><button onclick="insert('{')">{</button><button onclick="insert('}')">}</button><button onclick="insert('(')">(</button><button onclick="insert(')')">)</button><button onclick="insert(';')">;</button><button onclick="insert('=')">=</button><button onclick="insert('->')">-&gt;</button><button onclick="insert('"')">"</button><button onclick="insert("'")">'</button><button onclick="insert('\\')">\\</button><button onclick="insert('[')">[</button><button onclick="insert(']')">]</button></div><div class="keys"><button onclick="insert('public ')">public</button><button onclick="insert('static ')">static</button><button onclick="insert('void ')">void</button><button onclick="insert('class ')">class</button><button onclick="insert('System.out.println();')">println</button><button onclick="insert('main')">main</button><button onclick="insert('import ')">import</button><button onclick="insert('// ')">//</button></div></div>
+<footer class="status" id="status">Ready • Offline editor</footer></main>
+<script src="codemirror.min.js"></script><script>
+(function(){if(!window.CodeMirror)return;CodeMirror.defineMode("nicejava",function(){return{startState:function(){return{comment:false,str:null};},token:function(st,s){if(s.eatSpace())return null;if(st.comment){if(s.skipTo("*/")){s.match("*/");st.comment=false}else s.skipToEnd();return "comment"}if(st.str){while(!s.eol()){let c=s.next();if(c===st.str){st.str=null;break}if(c==="\\")s.next()}return "string"}if(s.match("//")){s.skipToEnd();return "comment"}if(s.match("/*")){st.comment=true;return "comment"}if(s.match(/^\"(?:[^\"\\]|\\.)*\"|^'(?:[^'\\]|\\.)*'/))return "string";if(s.match(/^(?:package|import|public|private|protected|static|final|class|interface|enum|extends|implements|void|int|long|double|float|boolean|char|byte|short|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|throws|this|super|var|record)\b/))return "keyword";if(s.match(/^(?:true|false|null)\b/))return "atom";if(s.match(/^\d+(?:\.\d+)?[fFdDlL]?/))return "number";if(s.match(/^[A-Z][\w$]*/))return "type";if(s.match(/^[A-Za-z_$][\w$]*(?=\s*\()/))return "def";s.next();return null}}});})();
+let editor=CodeMirror.fromTextArea(document.getElementById('source'),{mode:'nicejava',theme:'material-darker',lineNumbers:true,indentUnit:4,tabSize:4,indentWithTabs:false,lineWrapping:false,viewportMargin:Infinity});
+editor.setValue((window.NativeIDE&&NativeIDE.initialCode())||'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Nice Java IDE!");\n    }\n}\n');
+if(window.NativeIDE){document.getElementById('fileName').textContent=NativeIDE.fileName()||'Main.java';}
+function sync(){if(window.NativeIDE)NativeIDE.changed(editor.getValue())}
+window.runCode=function(){sync();document.getElementById('status').textContent='Compiling and running…';if(window.NativeIDE)NativeIDE.run()};
+window.saveFile=function(){sync();if(window.NativeIDE)NativeIDE.save()};
+window.openFile=function(){if(window.NativeIDE)NativeIDE.open()};
+window.newFile=function(){if(window.NativeIDE)NativeIDE.newFile()};
+window.undo=function(){editor.undo()};window.redo=function(){editor.redo()};
+window.findText=function(){let q=prompt('Find text');if(q){let c=editor.getSearchCursor(q);if(c.findNext()){editor.setSelection(c.from(),c.to());editor.focus()}}};
+window.insert=function(v){editor.replaceSelection(v);editor.focus()};
+window.toggleKeyboard=function(){let k=document.getElementById('keyboard');k.style.display=k.style.display==='none'?'block':'none';editor.refresh()};
+document.getElementById('themeBtn').onclick=function(){document.body.classList.toggle('light');editor.setOption('theme',document.body.classList.contains('light')?'default':'material-darker')};
+editor.on('change',sync);editor.refresh();
+})();
+</script></body></html>
