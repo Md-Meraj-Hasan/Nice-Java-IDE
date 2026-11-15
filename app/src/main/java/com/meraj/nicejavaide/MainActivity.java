@@ -24,6 +24,8 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
@@ -38,6 +40,8 @@ public class MainActivity extends Activity {
     private EditText editor;
     private TextView status;
     private TextView fileLabel;
+    private LinearLayout tabBar;
+    private final List<File> openTabs = new ArrayList<>();
     private File workspace;
     private File currentFile;
     private Uri currentUri;
@@ -95,6 +99,13 @@ public class MainActivity extends Activity {
         fileLabel.setTextSize(12);
         fileLabel.setPadding(dp(5), dp(12), dp(5), dp(6));
         root.addView(fileLabel);
+
+        HorizontalScrollView tabsScroll = new HorizontalScrollView(this);
+        tabsScroll.setHorizontalScrollBarEnabled(false);
+        tabBar = new LinearLayout(this);
+        tabBar.setOrientation(LinearLayout.HORIZONTAL);
+        tabsScroll.addView(tabBar);
+        root.addView(tabsScroll);
 
         editor = new EditText(this);
         editor.setGravity(Gravity.TOP | Gravity.START);
@@ -190,6 +201,7 @@ public class MainActivity extends Activity {
     private void newFile() {
         currentFile = new File(workspace, "Untitled.java");
         currentUri = null;
+        addOpenTab(currentFile);
         setEditorText("public class Untitled {\n    public static void main(String[] args) {\n    }\n}\n");
         updateFileLabel();
         status.setText("New file • use Save or Save As");
@@ -229,7 +241,8 @@ public class MainActivity extends Activity {
             saveCurrentBeforeSwitch();
             currentFile = file;
             currentUri = null;
-            editor.setText(readText(file));
+            addOpenTab(file);
+            setEditorText(readText(file));
             updateFileLabel();
             status.setText("Opened: " + workspace.toURI().relativize(file.toURI()).getPath());
         } catch (Exception e) {
@@ -297,7 +310,7 @@ public class MainActivity extends Activity {
             if (requestCode == REQUEST_OPEN) {
                 currentUri = uri;
                 currentFile = new File(workspace, "External.java");
-                editor.setText(readUri(uri));
+                setEditorText(readUri(uri));
                 status.setText("Opened external Java file");
                 updateFileLabel();
             } else if (requestCode == REQUEST_SAVE_AS) {
@@ -318,7 +331,7 @@ public class MainActivity extends Activity {
             if (requestCode == REQUEST_OPEN) {
                 currentUri = uri;
                 currentFile = new File(workspace, "External.java");
-                editor.setText(readUri(uri));
+                setEditorText(readUri(uri));
                 status.setText("Opened external Java file");
             } else if (requestCode == REQUEST_SAVE_AS) {
                 currentUri = uri;
@@ -334,7 +347,8 @@ public class MainActivity extends Activity {
     private void loadCurrentFile() {
         try {
             if (!currentFile.exists()) writeText(currentFile, STARTER);
-            editor.setText(readText(currentFile));
+            addOpenTab(currentFile);
+            setEditorText(readText(currentFile));
             updateFileLabel();
             status.setText("Opened: " + currentFile.getName());
         } catch (Exception e) {
@@ -464,11 +478,43 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    private void addOpenTab(File file) {
+        if (file == null) return;
+        for (File existing : openTabs) {
+            if (existing.equals(file)) {
+                refreshTabs();
+                return;
+            }
+        }
+        openTabs.add(file);
+        refreshTabs();
+    }
+
+    private void refreshTabs() {
+        if (tabBar == null) return;
+        tabBar.removeAllViews();
+        for (File file : openTabs) {
+            Button tab = new Button(this);
+            tab.setText(file.getName());
+            tab.setAllCaps(false);
+            tab.setTextSize(11);
+            tab.setMinHeight(dp(36));
+            tab.setPadding(dp(8), 0, dp(8), 0);
+            boolean active = currentUri == null && file.equals(currentFile);
+            tab.setTextColor(active ? 0xFFFFFFFF : 0xFF9CA3AF);
+            tab.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    active ? 0xFF1D4ED8 : 0xFF1F2937));
+            tab.setOnClickListener(v -> openWorkspaceFile(file));
+            tabBar.addView(tab);
+        }
+    }
+
     private void updateFileLabel() {
         if (fileLabel == null) return;
         String name = currentUri != null ? "External Java file" :
                 (currentFile == null ? "Untitled.java" : currentFile.getName());
         fileLabel.setText("WORKSPACE  /  " + name);
+        refreshTabs();
     }
 
     private String readUri(Uri uri) throws Exception {
