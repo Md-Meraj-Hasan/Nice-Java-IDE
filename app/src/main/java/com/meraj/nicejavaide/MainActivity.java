@@ -1552,6 +1552,12 @@ public class MainActivity extends Activity {
         }, "Jdk21-Runtime-Test").start();
     }
 
+    private boolean isPermissionDenied(java.io.IOException error) {
+        String message = error.getMessage();
+        return message != null && (message.contains("error=13") ||
+                message.toLowerCase(java.util.Locale.ROOT).contains("permission denied"));
+    }
+
     private String runJdkCommand(File executable, String... args) throws Exception {
         return runJdkCommand(executable, 30, args);
     }
@@ -1576,7 +1582,25 @@ public class MainActivity extends Activity {
             String lib = new File(jdkHome, "lib").getAbsolutePath();
             String server = new File(jdkHome, "lib/server").getAbsolutePath();
             env.put("LD_LIBRARY_PATH", server + ":" + lib + ":" + env.get("LD_LIBRARY_PATH"));
-            process = builder.start();
+            try {
+                process = builder.start();
+            } catch (java.io.IOException directError) {
+                // Android may deny execve() for binaries extracted into the app's
+                // writable files directory (EACCES / noexec policy). In that case,
+                // ask Android's system dynamic linker to load the same ARM64 ELF.
+                if (!isPermissionDenied(directError)) throw directError;
+                File linker = new File("/system/bin/linker64");
+                if (!linker.isFile()) throw directError;
+                List<String> linkerCommand = new ArrayList<>();
+                linkerCommand.add(linker.getAbsolutePath());
+                linkerCommand.addAll(command);
+                ProcessBuilder fallback = new ProcessBuilder(linkerCommand);
+                fallback.directory(getFilesDir());
+                fallback.redirectErrorStream(true);
+                fallback.redirectOutput(outputFile);
+                fallback.environment().putAll(env);
+                process = fallback.start();
+            }
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroy();
