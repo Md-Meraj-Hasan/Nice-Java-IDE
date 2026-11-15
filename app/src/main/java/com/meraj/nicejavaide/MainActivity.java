@@ -263,7 +263,7 @@ public class MainActivity extends Activity {
                 .putString("web_folder", webFolder.toString())
                 .putString("libraries_folder", librariesFolder.toString())
                 .putString("projects_folder", projectsFolder.toString()).apply();
-        copySafFolderToLocal(tree, projectsFolder, workspace);
+        copySafFolderToLocal(tree, projectsFolder, workspace);\n        copySafFolderToLocal(tree, webFolder, workspace);
         status.setText("Folders ready: Downloads/NiceJava/Java, HTML_CSS, Libraries");
         Toast.makeText(this, "NiceJava folders are ready", Toast.LENGTH_LONG).show();
     }
@@ -291,6 +291,34 @@ public class MainActivity extends Activity {
                     }
                 }
             }
+        }
+    }
+
+    private void syncFileToSaf(File file, Uri tree, Uri javaFolder, Uri webFolder) throws Exception {
+        String ext = file.getName().toLowerCase(java.util.Locale.ROOT);
+        boolean webFile = ext.endsWith(".html") || ext.endsWith(".htm")
+                || ext.endsWith(".css") || ext.endsWith(".js") || ext.endsWith(".mjs");
+        Uri parent = webFile ? webFolder : javaFolder;
+        String relative = workspace.toURI().relativize(file.toURI()).getPath();
+        String[] parts = relative.split("/");
+        for (int i = 0; i < parts.length - 1; i++) parent = findOrCreateFolder(tree, parent, parts[i]);
+        String filename = parts[parts.length - 1];
+        Uri target = null;
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(parent));
+        String[] columns = {DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME};
+        try (Cursor cursor = getContentResolver().query(children, columns, null, null, null)) {
+            if (cursor != null) while (cursor.moveToNext()) if (filename.equals(cursor.getString(1))) {
+                target = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0)); break;
+            }
+        }
+        if (target == null) target = DocumentsContract.createDocument(getContentResolver(), parent,
+                "application/octet-stream", filename);
+        if (target == null) throw new java.io.IOException("Cannot save " + filename);
+        try (InputStream in = new FileInputStream(file);
+             OutputStream out = getContentResolver().openOutputStream(target, "wt")) {
+            if (out == null) throw new java.io.IOException("Cannot write " + filename);
+            byte[] buffer = new byte[8192]; int n;
+            while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
         }
     }
 
@@ -438,9 +466,10 @@ public class MainActivity extends Activity {
         } else if (currentFile != null) {
             writeText(currentFile, editor.getText().toString());
             String treeText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null);
-            String folderText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("java_folder", null);
-            if (treeText != null && folderText != null) {
-                copyLocalFolderToSaf(workspace, Uri.parse(treeText), Uri.parse(folderText));
+            String javaText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("java_folder", null);
+            String webText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("web_folder", null);
+            if (treeText != null && javaText != null && webText != null) {
+                syncFileToSaf(currentFile, Uri.parse(treeText), Uri.parse(javaText), Uri.parse(webText));
             }
         }
     }
@@ -536,10 +565,10 @@ public class MainActivity extends Activity {
             } else {
                 writeText(currentFile, editor.getText().toString());
                 String treeText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null);
-                String folderText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString(
-                        "java_folder", null);
-                if (treeText != null && folderText != null) {
-                    copyLocalFolderToSaf(workspace, Uri.parse(treeText), Uri.parse(folderText));
+                String javaText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("java_folder", null);
+                String webText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("web_folder", null);
+                if (treeText != null && javaText != null && webText != null) {
+                    syncFileToSaf(currentFile, Uri.parse(treeText), Uri.parse(javaText), Uri.parse(webText));
                 }
                 status.setText("Saved: " + currentFile.getName());
             }
