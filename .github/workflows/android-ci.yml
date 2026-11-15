@@ -22,6 +22,20 @@ jobs:
       - name: Run browser preview automated tests
         run: node --test web-preview/tests/*.test.cjs
 
+      - name: Validate offline CodeMirror mobile IDE assets
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const vm = require('vm');
+          const html = fs.readFileSync('app/src/main/assets/ide/index.html', 'utf8');
+          for (const asset of ['codemirror.min.js', 'codemirror.min.css', 'material-darker.min.css']) {
+            if (!fs.existsSync('app/src/main/assets/ide/' + asset)) throw new Error('Missing IDE asset: ' + asset);
+          }
+          const scripts = [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];
+          if (!scripts.length) throw new Error('No inline IDE controller script found');
+          for (const script of scripts) new vm.Script(script[1]);
+          console.log('CodeMirror assets and inline controller syntax verified');
+          NODE
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
