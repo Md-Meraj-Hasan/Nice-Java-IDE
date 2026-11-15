@@ -18,8 +18,22 @@ The upstream archive is approximately 312 MB compressed. It includes tools such 
 
 **Packaging update:** The Android Gradle build now downloads this exact release archive, verifies its SHA-256, and packages the compressed full JDK archive into the APK assets. The app has an offline extraction flow for the bundled archive, including executable permission and link restoration. This makes the APK very large (the upstream compressed archive alone is about 312 MB), and extraction needs substantial additional internal storage.\n\n**Important:** Bundling and extracting the JDK does not yet prove its native executables can run on every Android device. Android executable-loading restrictions, app-private execution, process launching, and device API compatibility must be validated before the IDE can claim compile/run support. Java SE desktop APIs are not automatically available on Android.
 
+## Offline Java project libraries
+The APK build also bundles a curated Java SE library pack as JAR assets. The app copies these JARs into its private storage when the user taps **Libraries** (or when a project is run), and adds them to both the javac compile classpath and Java runtime classpath. No library download is needed on the phone.
+
+Included libraries:
+- Gson and Jackson Databind (JSON)
+- OkHttp (HTTP networking; includes its transitive dependencies)
+- Apache Commons Lang, IO, CSV, and Codec
+- Bouncy Castle provider (cryptography)
+- JUnit 4 (unit testing; includes Hamcrest)
+- H2 Database (embedded Java database/JDBC)
+- SLF4J API (logging facade)
+
+These are Java SE project libraries, not Android app SDK APIs. Spring Boot, JavaFX, LibGDX, and Android framework libraries are not part of this starter pack; they require separate framework-specific setup and compatibility testing.
+
 ## Current status
-This repository contains the editor/workspace foundation and a CI-time full JDK archive bundling plus offline extraction installer. Native `java` / `javac` process execution, multi-file compilation, diagnostics, and interactive console input remain implementation and device-testing milestones. The app must not claim to compile or execute Java until those parts have been integrated and tested on-device.
+The repository contains the editor/workspace foundation, a CI-time full JDK archive bundle, offline JDK extraction, and a curated offline Java JAR pack connected to the project's compiler/runtime classpaths. Native java/javac execution, dependency compatibility on the target phone, interactive console input, and full library smoke tests still require on-device validation.
 
 ## Compatibility note
 The selected JDK archive targets ARM64 Android/Bionic. The initial app build supports Android API 24+, but the JDK's minimum supported Android API level has not yet been independently verified. Desktop-only Java APIs and arbitrary native libraries may not run on Android.
