@@ -41,7 +41,7 @@ public final class JavaSyntaxHighlighter {
             char c = text.charAt(i);
             if (c == '/' && i + 1 < n && text.charAt(i + 1) == '/') {
                 int end = i + 2;
-                while (end < n && text.charAt(end) != '\\n') end++;
+                while (end < n && text.charAt(end) != '\n') end++;
                 color(text, i, end, COMMENT);
                 i = end;
             } else if (c == '/' && i + 1 < n && text.charAt(i + 1) == '*') {
@@ -57,7 +57,7 @@ public final class JavaSyntaxHighlighter {
                 while (end < n) {
                     char q = text.charAt(end++);
                     if (escaped) escaped = false;
-                    else if (q == '\\\\') escaped = true;
+                    else if (q == '\\') escaped = true;
                     else if (q == quote) break;
                 }
                 color(text, i, end, STRING);
