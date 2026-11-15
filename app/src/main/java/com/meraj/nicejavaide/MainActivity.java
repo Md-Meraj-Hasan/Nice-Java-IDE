@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
             "}\n";
 
     private EditText editor;
+    private WebView ideWebView;
     private TextView status;
     private TextView fileLabel;
     private LinearLayout tabBar;
@@ -89,112 +90,109 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
+        // Keep the native EditText as the bridge to the existing Java/Kotlin
+        // compiler and file-management code. The visible editor is CodeMirror.
+        editor = new EditText(this);
+        editor.setText(STARTER);
+        editor.setVisibility(View.GONE);
+        status = new TextView(this);
+        status.setVisibility(View.GONE);
+
+        ideWebView = new WebView(this);
+        WebSettings settings = ideWebView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        ideWebView.setBackgroundColor(0xFF090E18);
+        ideWebView.setWebChromeClient(new android.webkit.WebChromeClient());
+        ideWebView.setWebViewClient(new android.webkit.WebViewClient());
+        ideWebView.addJavascriptInterface(new NiceIdeBridge(), "NativeIDE");
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(10), dp(8), dp(10), dp(8));
-        root.setBackgroundColor(0xFF111827);
-
-        TextView heading = new TextView(this);
-        heading.setText("Nice Java IDE");
-        heading.setTextColor(0xFFF9FAFB);
-        heading.setTextSize(21);
-        heading.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
-        heading.setPadding(dp(4), dp(5), dp(4), dp(7));
-        root.addView(heading);
-
-        // Windows-style IDE menu bar. Existing toolbar shortcuts remain below it.
-        HorizontalScrollView menuScroll = new HorizontalScrollView(this);
-        menuScroll.setHorizontalScrollBarEnabled(false);
-        menuScroll.setFillViewport(false);
-        LinearLayout menuBar = new LinearLayout(this);
-        menuBar.setOrientation(LinearLayout.HORIZONTAL);
-        menuBar.setBackgroundColor(0xFF1F2937);
-        addMenuButton(menuBar, "File", 1);
-        addMenuButton(menuBar, "Edit", 2);
-        addMenuButton(menuBar, "Search", 3);
-        addMenuButton(menuBar, "View", 4);
-        addMenuButton(menuBar, "Tools", 5);
-        addMenuButton(menuBar, "Run", 6);
-        addMenuButton(menuBar, "Help", 7);
-        menuScroll.addView(menuBar);
-        root.addView(menuScroll);
-
-        HorizontalScrollView toolbarScroll = new HorizontalScrollView(this);
-        toolbarScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout toolbar = new LinearLayout(this);
-        toolbar.setOrientation(LinearLayout.HORIZONTAL);
-        addTool(toolbar, "New", v -> newFile());
-        addTool(toolbar, "Kotlin", v -> promptNewKotlinFile());
-        addTool(toolbar, "Files", v -> showWorkspaceFiles());
-        addTool(toolbar, "Setup Folders", v -> setupJavaStorage());
-        addTool(toolbar, "Open", v -> openDocument());
-        addTool(toolbar, "Save", v -> saveFile());
-        addTool(toolbar, "Save As", v -> saveAs());
-        addTool(toolbar, "Find", v -> showFind());
-        addTool(toolbar, "Replace", v -> showReplace());
-        addTool(toolbar, "Undo", v -> undo());
-        addTool(toolbar, "Redo", v -> redo());
-        addTool(toolbar, "Device", v -> showDeviceInfo());
-        addTool(toolbar, "Install JDK", v -> installBundledJdk());
-        addTool(toolbar, "Libraries", v -> installJavaProjectLibraries());
-        addTool(toolbar, "Run", v -> runCurrentProject());
-        addTool(toolbar, "Preview", v -> previewCurrentHtml());
-        toolbarScroll.addView(toolbar);
-        root.addView(toolbarScroll);
-
-        fileLabel = new TextView(this);
-        fileLabel.setTextColor(0xFF93C5FD);
-        fileLabel.setTextSize(12);
-        fileLabel.setPadding(dp(5), dp(12), dp(5), dp(6));
-        root.addView(fileLabel);
-
-        HorizontalScrollView tabsScroll = new HorizontalScrollView(this);
-        tabsScroll.setHorizontalScrollBarEnabled(false);
-        tabBar = new LinearLayout(this);
-        tabBar.setOrientation(LinearLayout.HORIZONTAL);
-        tabsScroll.addView(tabBar);
-        root.addView(tabsScroll);
-
-        editor = new EditText(this);
-        editor.setGravity(Gravity.TOP | Gravity.START);
-        editor.setTextSize(14);
-        editor.setTypeface(android.graphics.Typeface.MONOSPACE);
-        editor.setTextColor(0xFFE5E7EB);
-        editor.setHintTextColor(0xFF6B7280);
-        editor.setHint("Write code here...");
-        editor.setBackgroundColor(0xFF0B1220);
-        editor.setPadding(dp(12), dp(12), dp(12), dp(12));
-        editor.setHorizontallyScrolling(true);
-        editor.setMinLines(18);
-        editor.setTextIsSelectable(true);
-        editor.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-            @Override public void afterTextChanged(Editable editable) {
-                String current = editable.toString();
-                if (!restoringEditor && !current.equals(lastEditorText)) {
-                    undoStack.push(lastEditorText);
-                    while (undoStack.size() > HISTORY_LIMIT) undoStack.removeLast();
-                    redoStack.clear();
-                    lastEditorText = current;
-                }
-                CodeSyntaxHighlighter.apply(editable, getCurrentExtension());
-            }
-        });
-        LinearLayout.LayoutParams editorParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
-        editorParams.topMargin = dp(8);
-        root.addView(editor, editorParams);
-
-        status = new TextView(this);
-        status.setTextColor(0xFFFBBF24);
-        status.setTextSize(11);
-        status.setPadding(dp(5), dp(10), dp(5), dp(4));
-        root.addView(status);
+        root.setBackgroundColor(0xFF090E18);
+        root.addView(ideWebView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(editor, new LinearLayout.LayoutParams(1, 1));
+        root.addView(status, new LinearLayout.LayoutParams(1, 1));
         setContentView(root);
-        updateFileLabel();
+
         jdkHome = new File(getFilesDir(), "openjdk-21");
-        status.setText(isJdkInstalled() ? "OpenJDK 21 files installed" : "Full OpenJDK 21 bundled • ready to install offline");
+        ideWebView.loadUrl("file:///android_asset/ide/index.html");
+    }
+
+    private final class NiceIdeBridge {
+        @android.webkit.JavascriptInterface
+        public String initialCode() {
+            return editor == null ? STARTER : editor.getText().toString();
+        }
+
+        @android.webkit.JavascriptInterface
+        public String fileName() {
+            return currentFile == null ? "Main.java" : currentFile.getName();
+        }
+
+        @android.webkit.JavascriptInterface
+        public void changed(String code) {
+            runOnUiThread(() -> {
+                if (editor == null) return;
+                restoringEditor = true;
+                editor.setText(code == null ? "" : code);
+                lastEditorText = editor.getText().toString();
+                restoringEditor = false;
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void run() {
+            runOnUiThread(() -> {
+                saveCurrentBeforeSwitch();
+                runCurrentProject();
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void save() {
+            runOnUiThread(() -> saveFile());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void open() {
+            runOnUiThread(() -> openDocument());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void newFile() {
+            runOnUiThread(() -> newFile());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void files() {
+            runOnUiThread(() -> showWorkspaceFiles());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setupFolders() {
+            runOnUiThread(() -> setupJavaStorage());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void installJdk() {
+            runOnUiThread(() -> installBundledJdk());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void installLibraries() {
+            runOnUiThread(() -> installJavaProjectLibraries());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void newKotlin() {
+            runOnUiThread(() -> promptNewKotlinFile());
+        }
     }
 
     private void setEditorText(String value) {
@@ -204,6 +202,10 @@ public class MainActivity extends Activity {
         undoStack.clear();
         redoStack.clear();
         restoringEditor = false;
+        if (ideWebView != null) {
+            String safe = org.json.JSONObject.quote(value == null ? "" : value);
+            ideWebView.evaluateJavascript("window.setEditorCode && window.setEditorCode(" + safe + ")", null);
+        }
     }
 
     private void undo() {
