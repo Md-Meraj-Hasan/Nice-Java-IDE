@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.StatFs;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
@@ -83,6 +85,7 @@ public class MainActivity extends Activity {
         addTool(toolbar, "Replace", v -> showReplace());
         addTool(toolbar, "Undo", v -> undo());
         addTool(toolbar, "Redo", v -> redo());
+        addTool(toolbar, "Device", v -> showDeviceInfo());
         addTool(toolbar, "Run", v -> showEngineStatus());
         toolbarScroll.addView(toolbar);
         root.addView(toolbarScroll);
@@ -422,6 +425,34 @@ public class MainActivity extends Activity {
                     status.setText("Replaced " + count + " occurrence(s)");
                 })
                 .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showDeviceInfo() {
+        String[] abis = Build.SUPPORTED_ABIS;
+        StringBuilder abiText = new StringBuilder();
+        for (int i = 0; i < abis.length; i++) {
+            if (i > 0) abiText.append(", ");
+            abiText.append(abis[i]);
+        }
+
+        StatFs storage = new StatFs(getFilesDir().getAbsolutePath());
+        long freeBytes = storage.getAvailableBytes();
+        String freeSpace = android.text.format.Formatter.formatShortFileSize(this, freeBytes);
+        boolean arm64 = false;
+        for (String abi : abis) {
+            if ("arm64-v8a".equals(abi)) arm64 = true;
+        }
+
+        String report = "Android API: " + Build.VERSION.SDK_INT +
+                "\\nSupported ABIs: " + abiText +
+                "\\n64-bit ARM available: " + (arm64 ? "Yes" : "No") +
+                "\\nApp internal free space: " + freeSpace +
+                "\\n\\nOpenJDK 21 bundle is not installed yet. This check only reports device details; it does not prove that native JDK executables can run.";
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Device compatibility")
+                .setMessage(report)
+                .setPositiveButton("OK", null)
                 .show();
     }
 
