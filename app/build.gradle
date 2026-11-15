@@ -173,6 +173,15 @@ tasks.named('preBuild').configure {
     dependsOn tasks.named('bundleJavaProjectLibraries')
 }
 
+// The JDK archive is downloaded into src/main/assets during this same build.
+// Make the Android asset-generation task run after that download and rescan the directory.
+tasks.configureEach {
+    if (name == 'generateDebugAssets') {
+        dependsOn tasks.named('downloadOpenJdk21')
+        outputs.upToDateWhen { false }
+    }
+}
+
 
 // Fail the APK build early with a useful message if any offline runtime/library bundle is absent.
 tasks.register('verifyOfflineBundles') {
