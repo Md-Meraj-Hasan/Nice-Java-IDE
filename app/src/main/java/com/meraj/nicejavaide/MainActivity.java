@@ -77,7 +77,7 @@ public class MainActivity extends Activity {
         if (getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null) == null) {
             new android.app.AlertDialog.Builder(this)
                     .setTitle("Setup Downloads / NiceJava")
-                    .setMessage("Choose your Downloads folder once. NiceJava will create Java/Projects, HTML_CSS and Libraries folders and remember access.")
+                    .setMessage("Choose your Downloads folder once. NiceJava will create Java/Projects, Kotlin/Projects, HTML_CSS and Libraries folders and remember access.")
                     .setPositiveButton("Setup now", (dialog, which) -> setupJavaStorage())
                     .setNegativeButton("Later", null)
                     .show();
@@ -255,17 +255,20 @@ public class MainActivity extends Activity {
         Uri appRoot = findOrCreateFolder(tree, root, "NiceJava");
         Uri javaFolder = findOrCreateFolder(tree, appRoot, "Java");
         Uri webFolder = findOrCreateFolder(tree, appRoot, "HTML_CSS");
+        Uri kotlinFolder = findOrCreateFolder(tree, appRoot, "Kotlin");
+        Uri kotlinProjectsFolder = findOrCreateFolder(tree, kotlinFolder, "Projects");
         Uri librariesFolder = findOrCreateFolder(tree, appRoot, "Libraries");
         Uri projectsFolder = findOrCreateFolder(tree, javaFolder, "Projects");
         getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).edit()
                 .putString("tree_uri", tree.toString())
                 .putString("java_folder", projectsFolder.toString())
                 .putString("web_folder", webFolder.toString())
+                .putString("kotlin_folder", kotlinProjectsFolder.toString())
                 .putString("libraries_folder", librariesFolder.toString())
                 .putString("projects_folder", projectsFolder.toString()).apply();
         copySafFolderToLocal(tree, projectsFolder, workspace);
         copySafFolderToLocal(tree, webFolder, workspace);
-        status.setText("Folders ready: Downloads/NiceJava/Java, HTML_CSS, Libraries");
+        status.setText("Folders ready: Java, Kotlin, HTML_CSS and Libraries");
         Toast.makeText(this, "NiceJava folders are ready", Toast.LENGTH_LONG).show();
     }
 
@@ -299,7 +302,11 @@ public class MainActivity extends Activity {
         String ext = file.getName().toLowerCase(java.util.Locale.ROOT);
         boolean webFile = ext.endsWith(".html") || ext.endsWith(".htm")
                 || ext.endsWith(".css") || ext.endsWith(".js") || ext.endsWith(".mjs");
-        Uri parent = webFile ? webFolder : javaFolder;
+        boolean kotlinFile = ext.endsWith(".kt") || ext.endsWith(".kts");
+        Uri parent = webFile ? webFolder : (kotlinFile
+                ? Uri.parse(getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("kotlin_folder", ""))
+                : javaFolder);
+        if (parent == null || parent.toString().isEmpty()) parent = javaFolder;
         String relative = workspace.toURI().relativize(file.toURI()).getPath();
         String[] parts = relative.split("/");
         for (int i = 0; i < parts.length - 1; i++) parent = findOrCreateFolder(tree, parent, parts[i]);
@@ -400,7 +407,7 @@ public class MainActivity extends Activity {
         return name.endsWith(".java") || name.endsWith(".html") || name.endsWith(".htm")
                 || name.endsWith(".css") || name.endsWith(".js") || name.endsWith(".json")
                 || name.endsWith(".xml") || name.endsWith(".md") || name.endsWith(".txt")
-                || name.endsWith(".py");
+                || name.endsWith(".py") || name.endsWith(".kt") || name.endsWith(".kts");
     }
 
     private String getCurrentExtension() {
@@ -426,14 +433,14 @@ public class MainActivity extends Activity {
     private void promptNewWorkspaceFile() {
         EditText nameInput = new EditText(this);
         nameInput.setSingleLine(true);
-        nameInput.setHint("Main.java, index.html, style.css, app.js");
+        nameInput.setHint("Main.java, Main.kt, script.kts, index.html");
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Create code file")
                 .setView(nameInput)
                 .setPositiveButton("Create", (dialog, which) -> {
                     String relative = nameInput.getText().toString().trim();
                     if (relative.isEmpty()) return;
-                    if (!relative.matches("(?i).+\\.(java|html|htm|css|js|json|xml|md|txt|py)$")) relative += ".java";
+                    if (!relative.matches("(?i).+\\.(java|kt|kts|html|htm|css|js|json|xml|md|txt|py)$")) relative += ".java";
                     File target = new File(workspace, relative).getAbsoluteFile();
                     try {
                         String rootPath = workspace.getCanonicalPath() + File.separator;
@@ -448,6 +455,10 @@ public class MainActivity extends Activity {
                             starter = "body {\\n  font-family: sans-serif;\\n}\\n";
                         } else if (lower.endsWith(".js")) {
                             starter = "console.log('Hello JavaScript!');\\n";
+                        } else if (lower.endsWith(".kt")) {
+                            starter = "fun main() {\\n    println(\\"Hello from Nice Kotlin IDE!\\")\\n}\\n";
+                        } else if (lower.endsWith(".kts")) {
+                            starter = "println(\\"Hello from Kotlin Script!\\")\\n";
                         } else if (lower.endsWith(".java")) {
                             starter = "public class " + target.getName().substring(0, target.getName().length() - 5) + " {\\n    public static void main(String[] args) {\\n        System.out.println(\\\"Hello Java!\\\");\\n    }\\n}\\n";
                         }
