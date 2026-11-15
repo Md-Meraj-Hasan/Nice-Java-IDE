@@ -160,8 +160,12 @@ public class MainActivity extends Activity {
         @android.webkit.JavascriptInterface
         public void run() {
             runOnUiThread(() -> {
-                saveCurrentBeforeSwitch();
-                runCurrentProject();
+                try {
+                    saveCurrentBeforeSwitch();
+                    runCurrentProject();
+                } catch (Exception e) {
+                    showError("Unable to prepare code for running: " + e.getMessage());
+                }
             });
         }
 
