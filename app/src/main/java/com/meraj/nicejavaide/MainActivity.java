@@ -27,6 +27,14 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.LinkOption;
+
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_OPEN = 101;
@@ -50,6 +58,7 @@ public class MainActivity extends Activity {
     private String lastEditorText = "";
     private boolean restoringEditor = false;
     private static final int HISTORY_LIMIT = 100;
+    private File jdkHome;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -90,6 +99,7 @@ public class MainActivity extends Activity {
         addTool(toolbar, "Undo", v -> undo());
         addTool(toolbar, "Redo", v -> redo());
         addTool(toolbar, "Device", v -> showDeviceInfo());
+        addTool(toolbar, "Install JDK", v -> installBundledJdk());
         addTool(toolbar, "Run", v -> showEngineStatus());
         toolbarScroll.addView(toolbar);
         root.addView(toolbarScroll);
@@ -145,7 +155,8 @@ public class MainActivity extends Activity {
         root.addView(status);
         setContentView(root);
         updateFileLabel();
-        status.setText("Offline workspace ready • JDK integration in progress");
+        jdkHome = new File(getFilesDir(), "openjdk-21");
+        status.setText(isJdkInstalled() ? "OpenJDK 21 files installed" : "Full OpenJDK 21 bundled • ready to install offline");
     }
 
     private void setEditorText(String value) {
@@ -440,6 +451,158 @@ public class MainActivity extends Activity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private boolean isJdkInstalled() {
+        File java = new File(jdkHome, "bin/java");
+        File javac = new File(jdkHome, "bin/javac");
+        return java.isFile() && javac.isFile();
+    }
+
+    private void installBundledJdk() {
+        if (isJdkInstalled()) {
+            status.setText("OpenJDK 21 is already extracted");
+            showJdkDetails();
+            return;
+        }
+        if (!"arm64-v8a".equals(Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "")) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("ARM64 device required")
+                    .setMessage("This bundled OpenJDK build targets Android ARM64 (arm64-v8a).")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        long free = new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes();
+        if (free < 1200L * 1024L * 1024L) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Storage space is low")
+                    .setMessage("Please keep at least 1.2 GB free in internal storage before extracting the full JDK.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Install bundled OpenJDK 21?")
+                .setMessage("The full ARM64 JDK archive is already inside this APK. Extraction needs substantial internal storage and may take several minutes. No internet download is required on the phone.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Install", (dialog, which) -> extractBundledJdk())
+                .show();
+    }
+
+    private void extractBundledJdk() {
+        android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
+        progress.setTitle("Installing OpenJDK 21");
+        progress.setMessage("Extracting full offline toolchain…");
+        progress.setIndeterminate(true);
+        progress.setCancelable(false);
+        progress.show();
+
+        new Thread(() -> {
+            File staging = new File(getFilesDir(), "openjdk-21-installing");
+            boolean success = false;
+            String error = null;
+            try {
+                deleteTree(staging);
+                if (!staging.mkdirs()) throw new IllegalStateException("Cannot create JDK folder");
+                try (InputStream raw = getAssets().open("jdk21-android.tar.gz");
+                     GzipCompressorInputStream gzip = new GzipCompressorInputStream(raw);
+                     TarArchiveInputStream tar = new TarArchiveInputStream(gzip)) {
+                    TarArchiveEntry entry;
+                    byte[] buffer = new byte[64 * 1024];
+                    while ((entry = tar.getNextTarEntry()) != null) {
+                        File output = new File(staging, entry.getName()).getCanonicalFile();
+                        String base = staging.getCanonicalPath() + File.separator;
+                        if (!output.getPath().startsWith(base) && !output.equals(staging)) {
+                            throw new SecurityException("Unsafe path in JDK archive");
+                        }
+                        if (entry.isDirectory()) {
+                            if (!output.exists() && !output.mkdirs()) throw new IllegalStateException("Cannot create " + entry.getName());
+                        } else if (entry.isSymbolicLink()) {
+                            File parent = output.getParentFile();
+                            if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create link folder");
+                            Path linkTarget = Paths.get(entry.getLinkName());
+                            if (linkTarget.isAbsolute()) throw new SecurityException("Absolute symlink in JDK archive");
+                            Files.createSymbolicLink(output.toPath(), linkTarget);
+                        } else if (entry.isFile()) {
+                            File parent = output.getParentFile();
+                            if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create " + parent);
+                            try (FileOutputStream out = new FileOutputStream(output)) {
+                                int count;
+                                while ((count = tar.read(buffer)) != -1) out.write(buffer, 0, count);
+                            }
+                            if ((entry.getMode() & 0111) != 0) output.setExecutable(true, false);
+                        }
+                    }
+                }
+                File home = findJdkHome(staging, 0);
+                if (home == null) throw new IllegalStateException("JDK bin/java and bin/javac were not found in the archive");
+                File destination = jdkHome;
+                deleteTree(destination);
+                if (!home.equals(staging)) {
+                    if (!home.renameTo(destination)) throw new IllegalStateException("Cannot move extracted JDK into place");
+                    deleteTree(staging);
+                } else if (!staging.renameTo(destination)) {
+                    throw new IllegalStateException("Cannot finalize JDK installation");
+                }
+                jdkHome = destination;
+                if (!isJdkInstalled()) throw new IllegalStateException("JDK compiler files are missing");
+                success = true;
+            } catch (Exception e) {
+                error = e.getClass().getSimpleName() + ": " + e.getMessage();
+                deleteTree(staging);
+            }
+            final boolean installed = success;
+            final String failure = error;
+            runOnUiThread(() -> {
+                progress.dismiss();
+                if (installed) {
+                    status.setText("OpenJDK 21 extracted • native runtime test pending");
+                    showJdkDetails();
+                } else {
+                    status.setText("JDK extraction failed");
+                    new android.app.AlertDialog.Builder(this).setTitle("JDK installation failed")
+                            .setMessage(failure == null ? "Unknown error" : failure)
+                            .setPositiveButton("OK", null).show();
+                }
+            });
+        }, "Jdk21-Extractor").start();
+    }
+
+    private File findJdkHome(File folder, int depth) {
+        if (folder == null || depth > 4) return null;
+        File java = new File(folder, "bin/java");
+        File javac = new File(folder, "bin/javac");
+        if (java.isFile() && javac.isFile()) return folder;
+        File[] children = folder.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory()) {
+                    File found = findJdkHome(child, depth + 1);
+                    if (found != null) return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void showJdkDetails() {
+        String message = "JDK: OpenJDK 21.0.4 ARM64/Bionic" +
+                "\\njava: " + new File(jdkHome, "bin/java").isFile() +
+                "\\njavac: " + new File(jdkHome, "bin/javac").isFile() +
+                "\\njar: " + new File(jdkHome, "bin/jar").isFile() +
+                "\\njavadoc: " + new File(jdkHome, "bin/javadoc").isFile() +
+                "\\njshell: " + new File(jdkHome, "bin/jshell").isFile() +
+                "\\n\\nFiles extracted. Native process execution still needs device verification.";
+        new android.app.AlertDialog.Builder(this).setTitle("OpenJDK 21")
+                .setMessage(message).setPositiveButton("OK", null).show();
+    }
+
+    private void deleteTree(File file) {
+        if (file == null || !file.exists()) return;
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) for (File child : children) deleteTree(child);
+        }
+        file.delete();
     }
 
     private void showDeviceInfo() {
