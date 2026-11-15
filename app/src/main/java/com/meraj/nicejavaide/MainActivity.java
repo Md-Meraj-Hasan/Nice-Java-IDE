@@ -680,10 +680,10 @@ public class MainActivity extends Activity {
                 String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-Dfile.encoding=UTF-8",
                         "-cp", classes.getAbsolutePath(), mainClass);
                 success = true;
-                report = "BUILD SUCCESSFUL\\n" + sources.size() + " Java source file(s) compiled.\\n\\n" +
-                        "RUN: " + mainClass + "\\n\\n" + (runOutput.isEmpty() ? "(Program finished with no output)" : runOutput);
+                report = "BUILD SUCCESSFUL\n" + sources.size() + " Java source file(s) compiled.\n\n" +
+                        "RUN: " + mainClass + "\n\n" + (runOutput.isEmpty() ? "(Program finished with no output)" : runOutput);
             } catch (Exception e) {
-                report = "BUILD / RUN FAILED\\n\\n" + e.getMessage();
+                report = "BUILD / RUN FAILED\n\n" + e.getMessage();
             }
             final boolean ok = success;
             final String result = report;
