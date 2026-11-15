@@ -997,7 +997,7 @@ public class MainActivity extends Activity {
             try {
                 deleteTree(staging);
                 if (!staging.mkdirs()) throw new IllegalStateException("Cannot create JDK folder");
-                try (InputStream raw = getAssets().open("jdk21-android.tar.gz");
+                try (InputStream raw = openBundledJdkArchive();
                      GzipCompressorInputStream gzip = new GzipCompressorInputStream(raw);
                      TarArchiveInputStream tar = new TarArchiveInputStream(gzip)) {
                     TarArchiveEntry entry;
@@ -1065,6 +1065,25 @@ public class MainActivity extends Activity {
                 }
             });
         }, "Jdk21-Extractor").start();
+    }
+
+    private InputStream openBundledJdkArchive() throws Exception {
+        final String expected = "jdk21-android.tar.gz";
+        try {
+            return getAssets().open(expected);
+        } catch (java.io.FileNotFoundException missing) {
+            String[] rootAssets = getAssets().list("");
+            StringBuilder found = new StringBuilder();
+            if (rootAssets != null) {
+                for (String asset : rootAssets) {
+                    if (found.length() > 0) found.append(", ");
+                    found.append(asset);
+                }
+            }
+            throw new java.io.FileNotFoundException(
+                    "Bundled JDK archive is missing from this APK: assets/" + expected +
+                    ". APK root assets: [" + found + "]. Rebuild APK after checking the JDK asset packaging task.");
+        }
     }
 
     private File findJdkHome(File folder, int depth) {
