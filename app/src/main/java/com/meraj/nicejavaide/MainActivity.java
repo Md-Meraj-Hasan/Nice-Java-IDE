@@ -491,9 +491,9 @@ public class MainActivity extends Activity {
                         } else if (lower.endsWith(".js")) {
                             starter = "console.log('Hello JavaScript!');\\n";
                         } else if (lower.endsWith(".kt")) {
-                            starter = "fun main() {\\n    println(\\"Hello from Nice Kotlin IDE!\\")\\n}\\n";
+                            starter = "fun main() {\n    println(\"Hello from Nice Kotlin IDE!\")\n}\n";
                         } else if (lower.endsWith(".kts")) {
-                            starter = "println(\\"Hello from Kotlin Script!\\")\\n";
+                            starter = "println(\"Hello from Kotlin Script!\")\n";
                         } else if (lower.endsWith(".java")) {
                             starter = "public class " + target.getName().substring(0, target.getName().length() - 5) + " {\\n    public static void main(String[] args) {\\n        System.out.println(\\\"Hello Java!\\\");\\n    }\\n}\\n";
                         }
