@@ -854,6 +854,19 @@ public class MainActivity extends Activity {
         return new File(getFilesDir(), "java-libs");
     }
 
+    private String getJavaLibrariesClasspath() throws Exception {
+        File[] jars = getJavaLibrariesDirectory().listFiles((dir, name) -> name.endsWith(".jar"));
+        if (jars == null || jars.length == 0) {
+            throw new IllegalStateException("Offline Java/Kotlin libraries are not installed.");
+        }
+        StringBuilder classpath = new StringBuilder();
+        for (File jar : jars) {
+            if (classpath.length() > 0) classpath.append(File.pathSeparator);
+            classpath.append(jar.getAbsolutePath());
+        }
+        return classpath.toString();
+    }
+
     private void installJavaProjectLibraries() {
         status.setText("Installing offline Java libraries…");
         new Thread(() -> {
@@ -1231,6 +1244,8 @@ public class MainActivity extends Activity {
                 if (currentUri != null || currentFile == null) {
                     throw new IllegalStateException("Save the Kotlin file inside Workspace before running.");
                 }
+                ensureJavaLibrariesInstalled();
+                String projectLibraryClasspath = getJavaLibrariesClasspath();
                 File compilerHome = ensureKotlinCompilerInstalled();
                 File compilerLib = new File(compilerHome, "lib");
                 String compilerClassPath = new File(compilerLib, "*").getAbsolutePath();
@@ -1240,6 +1255,7 @@ public class MainActivity extends Activity {
                             "-cp", compilerClassPath,
                             "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
                             "-kotlin-home", compilerHome.getAbsolutePath(),
+                            "-classpath", projectLibraryClasspath,
                             "-script", currentFile.getAbsolutePath());
                     success = true;
                     report = "KOTLIN SCRIPT SUCCESSFUL\n\n" +
@@ -1260,6 +1276,8 @@ public class MainActivity extends Activity {
                     compilerArgs.add("-kotlin-home");
                     compilerArgs.add(compilerHome.getAbsolutePath());
                     compilerArgs.add("-include-runtime");
+                    compilerArgs.add("-classpath");
+                    compilerArgs.add(projectLibraryClasspath);
                     compilerArgs.add("-d");
                     compilerArgs.add(outputJar.getAbsolutePath());
                     for (File source : sources) compilerArgs.add(source.getAbsolutePath());
@@ -1279,7 +1297,8 @@ public class MainActivity extends Activity {
                     String className = fileName.substring(0, fileName.length() - 3) + "Kt";
                     String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
                     String output = runJdkCommand(new File(jdkHome, "bin/java"), 60,
-                            "-Dfile.encoding=UTF-8", "-cp", outputJar.getAbsolutePath(), mainClass);
+                            "-Dfile.encoding=UTF-8", "-cp",
+                            outputJar.getAbsolutePath() + File.pathSeparator + projectLibraryClasspath, mainClass);
                     success = true;
                     report = "KOTLIN BUILD SUCCESSFUL\n" + sources.size() +
                             " Kotlin source file(s) compiled.\n\nRUN: " + mainClass + "\n\n" +
