@@ -102,6 +102,7 @@ public class MainActivity extends Activity {
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         addTool(toolbar, "New", v -> newFile());
+        addTool(toolbar, "Kotlin", v -> promptNewKotlinFile());
         addTool(toolbar, "Files", v -> showWorkspaceFiles());
         addTool(toolbar, "Setup Folders", v -> setupJavaStorage());
         addTool(toolbar, "Open", v -> openDocument());
@@ -267,6 +268,7 @@ public class MainActivity extends Activity {
                 .putString("libraries_folder", librariesFolder.toString())
                 .putString("projects_folder", projectsFolder.toString()).apply();
         copySafFolderToLocal(tree, projectsFolder, workspace);
+        copySafFolderToLocal(tree, kotlinProjectsFolder, workspace);
         copySafFolderToLocal(tree, webFolder, workspace);
         status.setText("Folders ready: Java, Kotlin, HTML_CSS and Libraries");
         Toast.makeText(this, "NiceJava folders are ready", Toast.LENGTH_LONG).show();
@@ -428,6 +430,39 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             status.setText("Open error: " + e.getMessage());
         }
+    }
+
+    private void promptNewKotlinFile() {
+        EditText nameInput = new EditText(this);
+        nameInput.setSingleLine(true);
+        nameInput.setHint("Main.kt or script.kts");
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("New Kotlin File")
+                .setMessage("Kotlin source files are stored in Downloads/NiceJava/Kotlin/Projects.")
+                .setView(nameInput)
+                .setPositiveButton("Create", (dialog, which) -> {
+                    String name = nameInput.getText().toString().trim();
+                    if (name.isEmpty()) name = "Main.kt";
+                    if (!name.matches("(?i).+\\.(kt|kts)$")) name += ".kt";
+                    if (name.contains("/") || name.contains("\\\\")) {
+                        status.setText("Use a file name without folder separators");
+                        return;
+                    }
+                    File target = new File(workspace, name);
+                    try {
+                        if (target.exists()) throw new IllegalArgumentException("File already exists");
+                        String starter = name.toLowerCase(java.util.Locale.ROOT).endsWith(".kts")
+                                ? "println(\\"Hello from Kotlin Script!\\")\\n"
+                                : "fun main() {\\n    println(\\"Hello from Nice Kotlin IDE!\\")\\n}\\n";
+                        writeText(target, starter);
+                        openWorkspaceFile(target);
+                        status.setText("Kotlin file created • compiler integration is being prepared");
+                    } catch (Exception e) {
+                        status.setText("Kotlin create error: " + e.getMessage());
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void promptNewWorkspaceFile() {
@@ -968,6 +1003,10 @@ public class MainActivity extends Activity {
     private void runCurrentProject() {
         if (!"java".equals(getCurrentExtension())) {
             String ext = getCurrentExtension();
+            if ("kt".equals(ext) || "kts".equals(ext)) {
+                status.setText("Kotlin editor is ready. Kotlin compiler/runtime integration is the next build step.");
+                return;
+            }
             if ("html".equals(ext) || "htm".equals(ext) || "css".equals(ext) || "js".equals(ext)) {
                 previewCurrentHtml();
             } else {
