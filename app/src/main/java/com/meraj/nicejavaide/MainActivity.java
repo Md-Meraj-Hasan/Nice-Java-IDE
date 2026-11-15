@@ -1655,10 +1655,13 @@ public class MainActivity extends Activity {
     }
 
     private void updateFileLabel() {
-        if (fileLabel == null) return;
         String name = currentUri != null ? "External Java file" :
                 (currentFile == null ? "Untitled.java" : currentFile.getName());
-        fileLabel.setText("WORKSPACE  /  " + name);
+        if (fileLabel != null) fileLabel.setText("WORKSPACE  /  " + name);
+        if (ideWebView != null) {
+            String safe = org.json.JSONObject.quote(name);
+            ideWebView.evaluateJavascript("window.setFileName && window.setFileName(" + safe + ")", null);
+        }
         refreshTabs();
     }
 
