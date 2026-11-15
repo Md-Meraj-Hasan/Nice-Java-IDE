@@ -74,6 +74,14 @@ public class MainActivity extends Activity {
         currentFile = new File(workspace, "Main.java");
         buildUi();
         loadCurrentFile();
+        if (getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null) == null) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Setup Downloads / NiceJava")
+                    .setMessage("Choose your Downloads folder once. NiceJava will create Java/Projects, HTML_CSS and Libraries folders and remember access.")
+                    .setPositiveButton("Setup now", (dialog, which) -> setupJavaStorage())
+                    .setNegativeButton("Later", null)
+                    .show();
+        }
     }
 
     private void buildUi() {
@@ -251,11 +259,11 @@ public class MainActivity extends Activity {
         Uri projectsFolder = findOrCreateFolder(tree, javaFolder, "Projects");
         getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).edit()
                 .putString("tree_uri", tree.toString())
-                .putString("java_folder", javaFolder.toString())
+                .putString("java_folder", projectsFolder.toString())
                 .putString("web_folder", webFolder.toString())
                 .putString("libraries_folder", librariesFolder.toString())
                 .putString("projects_folder", projectsFolder.toString()).apply();
-        copySafFolderToLocal(tree, javaFolder, workspace);
+        copySafFolderToLocal(tree, projectsFolder, workspace);
         status.setText("Folders ready: Downloads/NiceJava/Java, HTML_CSS, Libraries");
         Toast.makeText(this, "NiceJava folders are ready", Toast.LENGTH_LONG).show();
     }
@@ -425,8 +433,16 @@ public class MainActivity extends Activity {
     }
 
     private void saveCurrentBeforeSwitch() throws Exception {
-        if (currentUri != null) writeUri(currentUri, editor.getText().toString());
-        else if (currentFile != null) writeText(currentFile, editor.getText().toString());
+        if (currentUri != null) {
+            writeUri(currentUri, editor.getText().toString());
+        } else if (currentFile != null) {
+            writeText(currentFile, editor.getText().toString());
+            String treeText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null);
+            String folderText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("java_folder", null);
+            if (treeText != null && folderText != null) {
+                copyLocalFolderToSaf(workspace, Uri.parse(treeText), Uri.parse(folderText));
+            }
+        }
     }
 
     private void openDocument() {
