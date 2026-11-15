@@ -732,40 +732,69 @@ public class MainActivity extends Activity {
     private void previewCurrentHtml() {
         try {
             saveCurrentBeforeSwitch();
-            if (currentUri != null) {
-                status.setText("Save HTML inside Workspace to preview linked CSS/JS files.");
+            if (currentUri != null || currentFile == null) {
+                status.setText("Save the web project inside Workspace before previewing it.");
                 return;
             }
+
+            File htmlFile = currentFile;
             String ext = getCurrentExtension();
-            if (!"html".equals(ext) && !"htm".equals(ext)) {
-                status.setText("Open an .html or .htm file to preview the web project.");
+            if ("css".equals(ext) || "js".equals(ext)) {
+                File folder = currentFile.getParentFile();
+                File index = new File(folder, "index.html");
+                File main = new File(folder, "main.html");
+                if (index.isFile()) htmlFile = index;
+                else if (main.isFile()) htmlFile = main;
+                else {
+                    File[] candidates = folder.listFiles((dir, name) ->
+                            name.toLowerCase(java.util.Locale.ROOT).endsWith(".html")
+                                    || name.toLowerCase(java.util.Locale.ROOT).endsWith(".htm"));
+                    if (candidates != null && candidates.length > 0) htmlFile = candidates[0];
+                }
+            }
+            String htmlExt = htmlFile.getName().toLowerCase(java.util.Locale.ROOT);
+            if (!htmlExt.endsWith(".html") && !htmlExt.endsWith(".htm")) {
+                status.setText("Create index.html in this folder, then Run HTML/CSS/JS.");
                 return;
             }
+
             WebView web = new WebView(this);
             WebSettings settings = web.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
             settings.setAllowFileAccess(true);
             settings.setAllowContentAccess(true);
-            File parent = currentFile.getParentFile();
-            String base = "file://" + parent.getAbsolutePath() + File.separator;
-            web.loadDataWithBaseURL(base, editor.getText().toString(), "text/html", "UTF-8", null);
+            settings.setLoadsImagesAutomatically(true);
+            web.setWebViewClient(new android.webkit.WebViewClient());
+            web.setWebChromeClient(new android.webkit.WebChromeClient());
+
             android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
-                    .setTitle("HTML Preview • " + currentFile.getName())
-                    .setView(web).setPositiveButton("Close", null).create();
+                    .setTitle("Web Preview • " + htmlFile.getName())
+                    .setView(web)
+                    .setPositiveButton("Close", null)
+                    .create();
+            dialog.setOnDismissListener(d -> web.destroy());
             dialog.show();
             dialog.getWindow().setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT,
                     android.view.WindowManager.LayoutParams.MATCH_PARENT);
-            status.setText("HTML preview ready • local CSS and JavaScript enabled");
+
+            // Load the saved HTML file directly so relative CSS, JS, images and other
+            // workspace assets resolve from the same project directory.
+            web.loadUrl(android.net.Uri.fromFile(htmlFile).toString());
+            status.setText("Running web project • HTML + linked CSS + JavaScript");
         } catch (Exception e) {
-            status.setText("Preview error: " + e.getMessage());
+            status.setText("Web preview error: " + e.getMessage());
         }
     }
 
     private void runCurrentProject() {
         if (!"java".equals(getCurrentExtension())) {
-            if ("html".equals(getCurrentExtension()) || "htm".equals(getCurrentExtension())) previewCurrentHtml();
-            else status.setText("Run is for Java files. Use HTML Preview for web projects.");
+            String ext = getCurrentExtension();
+            if ("html".equals(ext) || "htm".equals(ext) || "css".equals(ext) || "js".equals(ext)) {
+                previewCurrentHtml();
+            } else {
+                status.setText("Run supports Java and HTML/CSS/JavaScript projects.");
+            }
             return;
         }
         if (!isJdkInstalled()) {
