@@ -170,3 +170,35 @@ tasks.named('preBuild').configure {
     dependsOn tasks.named('downloadKotlinCompiler')
     dependsOn tasks.named('bundleJavaProjectLibraries')
 }
+
+
+// Fail the APK build early with a useful message if any offline runtime/library bundle is absent.
+tasks.register('verifyOfflineBundles') {
+    dependsOn tasks.named('downloadOpenJdk21')
+    dependsOn tasks.named('downloadKotlinCompiler')
+    dependsOn tasks.named('bundleJavaProjectLibraries')
+    doLast {
+        def jdk = jdkArchive.asFile
+        def kotlin = kotlinCompilerArchive.asFile
+        def libs = javaLibrariesOutput.get().dir('java-libs').asFile
+        if (!jdk.isFile() || jdk.length() < 100L * 1024L * 1024L) {
+            throw new GradleException("OpenJDK bundle missing or unexpectedly small: ${jdk}")
+        }
+        if (!kotlin.isFile() || kotlin.length() < 10L * 1024L * 1024L) {
+            throw new GradleException("Kotlin compiler bundle missing or unexpectedly small: ${kotlin}")
+        }
+        def jars = libs.exists() ? fileTree(libs).matching { include '*.jar' }.files : [] as Set
+        if (jars.isEmpty()) {
+            throw new GradleException("No Java project JAR libraries were bundled into ${libs}")
+        }
+        def invalid = jars.findAll { !it.isFile() || it.length() < 22 }
+        if (!invalid.isEmpty()) {
+            throw new GradleException("Invalid/empty Java project JAR(s): ${invalid}")
+        }
+        logger.lifecycle("Offline bundles verified: OpenJDK=${jdk.length()} bytes, Kotlin=${kotlin.length()} bytes, Java libraries=${jars.size()} JARs")
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('verifyOfflineBundles')
+}

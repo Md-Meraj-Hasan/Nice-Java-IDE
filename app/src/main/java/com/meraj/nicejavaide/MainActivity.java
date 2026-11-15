@@ -847,7 +847,9 @@ public class MainActivity extends Activity {
     private boolean isJdkInstalled() {
         File java = new File(jdkHome, "bin/java");
         File javac = new File(jdkHome, "bin/javac");
-        return java.isFile() && javac.isFile();
+        File runtime = new File(jdkHome, "lib/modules");
+        return java.isFile() && javac.isFile() && runtime.isFile()
+                && java.canExecute() && javac.canExecute();
     }
 
     private File getJavaLibrariesDirectory() {
@@ -897,30 +899,58 @@ public class MainActivity extends Activity {
     private int ensureJavaLibrariesInstalled() throws Exception {
         String[] assets = getAssets().list("java-libs");
         if (assets == null || assets.length == 0) {
-            throw new IllegalStateException("No bundled JAR files found in APK assets.");
+            throw new IllegalStateException("No bundled JAR files found in APK assets. Rebuild the APK after bundleJavaProjectLibraries.");
         }
         File destination = getJavaLibrariesDirectory();
         if (!destination.exists() && !destination.mkdirs()) {
-            throw new IllegalStateException("Cannot create Java library folder.");
+            throw new IllegalStateException("Cannot create Java library folder: " + destination);
         }
-        int copied = 0;
+        int ready = 0;
         byte[] buffer = new byte[32 * 1024];
         for (String name : assets) {
-            if (!name.endsWith(".jar")) continue;
+            if (!name.toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) continue;
             File target = new File(destination, name);
-            if (target.isFile() && target.length() > 0) continue;
+            if (target.isFile() && isValidJar(target)) {
+                ready++;
+                continue;
+            }
+            if (target.exists() && !target.delete()) {
+                throw new IllegalStateException("Cannot replace damaged library: " + name);
+            }
+            File temp = new File(destination, name + ".part");
+            if (temp.exists()) temp.delete();
             try (InputStream input = getAssets().open("java-libs/" + name);
-                 FileOutputStream output = new FileOutputStream(target)) {
+                 FileOutputStream output = new FileOutputStream(temp)) {
                 int read;
                 while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+                output.getFD().sync();
+            } catch (Exception copyError) {
+                temp.delete();
+                throw copyError;
             }
-            copied++;
+            if (!isValidJar(temp)) {
+                temp.delete();
+                throw new IllegalStateException("Bundled library is not a valid JAR: " + name);
+            }
+            if (!temp.renameTo(target)) {
+                temp.delete();
+                throw new IllegalStateException("Cannot activate library: " + name);
+            }
+            ready++;
         }
-        File[] installed = destination.listFiles((dir, name) -> name.endsWith(".jar"));
-        if (installed == null || installed.length == 0) {
-            throw new IllegalStateException("No Java JAR libraries were installed.");
+        if (ready == 0) {
+            throw new IllegalStateException("No .jar files found in APK assets/java-libs. Check Gradle bundleJavaProjectLibraries task.");
         }
-        return installed.length;
+        return ready;
+    }
+
+    private boolean isValidJar(File file) {
+        if (file == null || !file.isFile() || file.length() < 22) return false;
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(file)) {
+            return zip.entries().hasMoreElements();
+        } catch (Exception invalid) {
+            return false;
+        }
     }
 
     private void installBundledJdk() {
@@ -1374,11 +1404,11 @@ public class MainActivity extends Activity {
                 String compileOutput = runJdkCommand(new File(jdkHome, "bin/javac"), compileArgs.toArray(new String[0]));
                 String sourceText = readText(currentFile);
                 java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
-                        .compile("(?m)^\\\\s*package\\\\s+([A-Za-z_$][\\\\w$]*(?:\\\\.[A-Za-z_$][\\\\w$]*)*)\\\\s*;")
+                        .compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;")
                         .matcher(sourceText);
                 String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
                 java.util.regex.Matcher classMatcher = java.util.regex.Pattern
-                        .compile("(?m)\\\\bpublic\\\\s+(?:(?:abstract|final|sealed|non-sealed)\\\\s+)*(?:class|interface|enum|record)\\\\s+([A-Za-z_$][\\\\w$]*)")
+                        .compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)")
                         .matcher(sourceText);
                 String className = classMatcher.find() ? classMatcher.group(1) :
                         currentFile.getName().substring(0, currentFile.getName().length() - 5);
@@ -1471,29 +1501,38 @@ public class MainActivity extends Activity {
         List<String> command = new ArrayList<>();
         command.add(executable.getAbsolutePath());
         java.util.Collections.addAll(command, args);
-        ProcessBuilder builder = new ProcessBuilder(command);
-        builder.directory(getFilesDir());
-        builder.redirectErrorStream(true);
-        java.util.Map<String, String> env = builder.environment();
-        env.put("JAVA_HOME", jdkHome.getAbsolutePath());
-        env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
-        String lib = new File(jdkHome, "lib").getAbsolutePath();
-        String server = new File(jdkHome, "lib/server").getAbsolutePath();
-        env.put("LD_LIBRARY_PATH", server + ":" + lib + ":" + env.get("LD_LIBRARY_PATH"));
-        Process process = builder.start();
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) output.append(line).append('\n');
+        File outputFile = File.createTempFile("nicejava-process-", ".log", getCacheDir());
+        Process process = null;
+        try {
+            ProcessBuilder builder = new ProcessBuilder(command);
+            builder.directory(getFilesDir());
+            builder.redirectErrorStream(true);
+            builder.redirectOutput(outputFile);
+            java.util.Map<String, String> env = builder.environment();
+            env.put("JAVA_HOME", jdkHome.getAbsolutePath());
+            env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
+            String lib = new File(jdkHome, "lib").getAbsolutePath();
+            String server = new File(jdkHome, "lib/server").getAbsolutePath();
+            env.put("LD_LIBRARY_PATH", server + ":" + lib + ":" + env.get("LD_LIBRARY_PATH"));
+            process = builder.start();
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroy();
+                if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly();
+                String partial = outputFile.isFile() ? readText(outputFile) : "";
+                throw new IllegalStateException("JDK command timed out after " + timeoutSeconds +
+                        " seconds: " + executable.getName() + (partial.isEmpty() ? "" : "\n" + partial));
+            }
+            String output = outputFile.isFile() ? readText(outputFile) : "";
+            if (process.exitValue() != 0) {
+                throw new IllegalStateException(executable.getName() + " exited with code " +
+                        process.exitValue() + ": " + output);
+            }
+            return output.trim();
+        } finally {
+            if (process != null && process.isAlive()) process.destroyForcibly();
+            if (outputFile.exists()) outputFile.delete();
         }
-        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-            process.destroyForcibly();
-            throw new IllegalStateException("JDK command timed out after " + timeoutSeconds + " seconds: " + executable.getName());
-        }
-        if (process.exitValue() != 0) {
-            throw new IllegalStateException(executable.getName() + " exited with code " + process.exitValue() + ": " + output);
-        }
-        return output.toString().trim();
     }
 
     private void addOpenTab(File file) {

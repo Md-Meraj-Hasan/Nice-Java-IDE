@@ -50,3 +50,16 @@ Open this repository in Android Studio and build the app. The project uses a sta
 
 ## License
 The application license and all bundled dependency licenses/attributions must be documented before release.
+
+
+## Runtime reliability patch (2026-11)
+
+The source patch improves three failure points:
+- Java package/class detection now uses correctly escaped Java regular expressions, so packaged classes are launched with their fully-qualified class name.
+- Native JDK command output is redirected to a temporary log file while the process runs. This prevents a full stdout pipe from blocking the reader before the timeout can be applied.
+- Offline JAR installation copies to a temporary file, validates each JAR as a ZIP archive, then atomically activates it. Damaged cached JARs are replaced on the next install.
+- The JDK is not marked installed unless `java`, `javac`, `lib/modules`, and executable permissions are present.
+- `verifyOfflineBundles` makes the APK build fail early with a clear error if the OpenJDK archive, Kotlin compiler archive, or Java project JAR assets are missing.
+
+### Required device validation
+After installing the APK, use **Tools → Install OpenJDK 21**, then **View → Engine Status**. The runtime test must display `NICE_JAVA_RUNTIME_OK`. Next use **Tools → Install Java Project Libraries** and test a small Java file importing Gson. A successful Gradle build alone does not prove that native JDK binaries can execute on the target Android device.
