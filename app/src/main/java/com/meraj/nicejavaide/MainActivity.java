@@ -701,7 +701,45 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    private void previewCurrentHtml() {
+        try {
+            saveCurrentBeforeSwitch();
+            if (currentUri != null) {
+                status.setText("Save HTML inside Workspace to preview linked CSS/JS files.");
+                return;
+            }
+            String ext = getCurrentExtension();
+            if (!"html".equals(ext) && !"htm".equals(ext)) {
+                status.setText("Open an .html or .htm file to preview the web project.");
+                return;
+            }
+            WebView web = new WebView(this);
+            WebSettings settings = web.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setAllowFileAccess(true);
+            settings.setAllowContentAccess(true);
+            File parent = currentFile.getParentFile();
+            String base = "file://" + parent.getAbsolutePath() + File.separator;
+            web.loadDataWithBaseURL(base, editor.getText().toString(), "text/html", "UTF-8", null);
+            android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+                    .setTitle("HTML Preview • " + currentFile.getName())
+                    .setView(web).setPositiveButton("Close", null).create();
+            dialog.show();
+            dialog.getWindow().setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT);
+            status.setText("HTML preview ready • local CSS and JavaScript enabled");
+        } catch (Exception e) {
+            status.setText("Preview error: " + e.getMessage());
+        }
+    }
+
     private void runCurrentProject() {
+        if (!"java".equals(getCurrentExtension())) {
+            if ("html".equals(getCurrentExtension()) || "htm".equals(getCurrentExtension())) previewCurrentHtml();
+            else status.setText("Run is for Java files. Use HTML Preview for web projects.");
+            return;
+        }
         if (!isJdkInstalled()) {
             new android.app.AlertDialog.Builder(this)
                     .setTitle("OpenJDK 21 is not installed")
