@@ -80,6 +80,7 @@ public class MainActivity extends Activity {
         addTool(toolbar, "Save", v -> saveFile());
         addTool(toolbar, "Save As", v -> saveAs());
         addTool(toolbar, "Find", v -> showFind());
+        addTool(toolbar, "Replace", v -> showReplace());
         addTool(toolbar, "Undo", v -> undo());
         addTool(toolbar, "Redo", v -> redo());
         addTool(toolbar, "Run", v -> showEngineStatus());
@@ -374,6 +375,51 @@ public class MainActivity extends Activity {
                     } else {
                         status.setText("Not found: " + needle);
                     }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showReplace() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(20), dp(8), dp(20), 0);
+
+        EditText findInput = new EditText(this);
+        findInput.setSingleLine(true);
+        findInput.setHint("Text to find");
+        panel.addView(findInput);
+
+        EditText replaceInput = new EditText(this);
+        replaceInput.setSingleLine(true);
+        replaceInput.setHint("Replace with");
+        panel.addView(replaceInput);
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Find and replace")
+                .setView(panel)
+                .setPositiveButton("Replace all", (dialog, which) -> {
+                    String find = findInput.getText().toString();
+                    if (find.isEmpty()) {
+                        status.setText("Enter text to find");
+                        return;
+                    }
+                    String source = editor.getText().toString();
+                    int count = 0;
+                    int from = 0;
+                    while ((from = source.indexOf(find, from)) >= 0) {
+                        count++;
+                        from += find.length();
+                    }
+                    if (count == 0) {
+                        status.setText("No matches found");
+                        return;
+                    }
+                    String updated = source.replace(find, replaceInput.getText().toString());
+                    int cursor = Math.max(0, editor.getSelectionStart());
+                    setEditorText(updated);
+                    editor.setSelection(Math.min(cursor, editor.length()));
+                    status.setText("Replaced " + count + " occurrence(s)");
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
