@@ -26,10 +26,10 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
     private static final int REQUEST_OPEN = 101;
     private static final int REQUEST_SAVE_AS = 102;
-    private static final String STARTER = "public class Main {\\n" +
-            "    public static void main(String[] args) {\\n" +
+    private static final String STARTER = "public class Main {\n" +
+            "    public static void main(String[] args) {\n" +
             "        System.out.println(\"Hello from Nice Java IDE!\");\n" +
-            "    }\\n" +
+            "    }\n" +
             "}\\n";
 
     private EditText editor;
@@ -69,6 +69,7 @@ public class MainActivity extends Activity {
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         addTool(toolbar, "New", v -> newFile());
+        addTool(toolbar, "Files", v -> showWorkspaceFiles());
         addTool(toolbar, "Open", v -> openDocument());
         addTool(toolbar, "Save", v -> saveFile());
         addTool(toolbar, "Save As", v -> saveAs());
@@ -129,9 +130,84 @@ public class MainActivity extends Activity {
     private void newFile() {
         currentFile = new File(workspace, "Untitled.java");
         currentUri = null;
-        editor.setText("public class Untitled {\\n    public static void main(String[] args) {\\n    }\\n}\\n");
+        editor.setText("public class Untitled {\n    public static void main(String[] args) {\n    }\n}\n");
         updateFileLabel();
         status.setText("New file • use Save or Save As");
+    }
+
+    private void showWorkspaceFiles() {
+        java.util.ArrayList<File> files = new java.util.ArrayList<>();
+        collectJavaFiles(workspace, files);
+        java.util.Collections.sort(files, (a, b) -> a.getAbsolutePath().compareToIgnoreCase(b.getAbsolutePath()));
+        String[] names = new String[files.size() + 1];
+        names[0] = "+  Create new Java file";
+        for (int i = 0; i < files.size(); i++) {
+            String relative = workspace.toURI().relativize(files.get(i).toURI()).getPath();
+            names[i + 1] = relative;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Workspace • Java files")
+                .setItems(names, (dialog, which) -> {
+                    if (which == 0) promptNewWorkspaceFile();
+                    else openWorkspaceFile(files.get(which - 1));
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void collectJavaFiles(File folder, java.util.List<File> output) {
+        File[] children = folder.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child.isDirectory()) collectJavaFiles(child, output);
+            else if (child.getName().endsWith(".java")) output.add(child);
+        }
+    }
+
+    private void openWorkspaceFile(File file) {
+        try {
+            saveCurrentBeforeSwitch();
+            currentFile = file;
+            currentUri = null;
+            editor.setText(readText(file));
+            updateFileLabel();
+            status.setText("Opened: " + workspace.toURI().relativize(file.toURI()).getPath());
+        } catch (Exception e) {
+            status.setText("Open error: " + e.getMessage());
+        }
+    }
+
+    private void promptNewWorkspaceFile() {
+        EditText nameInput = new EditText(this);
+        nameInput.setSingleLine(true);
+        nameInput.setHint("Example: Main.java or app/Utils.java");
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Create Java file")
+                .setView(nameInput)
+                .setPositiveButton("Create", (dialog, which) -> {
+                    String relative = nameInput.getText().toString().trim();
+                    if (relative.isEmpty()) return;
+                    if (!relative.endsWith(".java")) relative += ".java";
+                    File target = new File(workspace, relative).getAbsoluteFile();
+                    try {
+                        String rootPath = workspace.getCanonicalPath() + File.separator;
+                        String targetPath = target.getCanonicalPath();
+                        if (!targetPath.startsWith(rootPath)) throw new IllegalArgumentException("Invalid file path");
+                        if (target.exists()) throw new IllegalArgumentException("File already exists");
+                        writeText(target, "public class " + target.getName().replace(".java", "") +
+                                " {\\n    public static void main(String[] args) {\\n    }\\n}\\n");
+                        openWorkspaceFile(target);
+                    } catch (Exception e) {
+                        status.setText("Create error: " + e.getMessage());
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void saveCurrentBeforeSwitch() throws Exception {
+        if (currentUri != null) writeUri(currentUri, editor.getText().toString());
+        else if (currentFile != null) writeText(currentFile, editor.getText().toString());
     }
 
     private void openDocument() {
