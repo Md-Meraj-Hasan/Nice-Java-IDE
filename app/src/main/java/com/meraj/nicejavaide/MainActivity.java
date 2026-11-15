@@ -417,7 +417,7 @@ public class MainActivity extends Activity {
                     }
                     String updated = source.replace(find, replaceInput.getText().toString());
                     int cursor = Math.max(0, editor.getSelectionStart());
-                    setEditorText(updated);
+                    editor.setText(updated);
                     editor.setSelection(Math.min(cursor, editor.length()));
                     status.setText("Replaced " + count + " occurrence(s)");
                 })
