@@ -11,6 +11,7 @@ import android.os.StatFs;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -18,6 +19,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.PopupMenu;
 import android.webkit.WebView;
 import android.webkit.WebSettings;
 
@@ -96,8 +98,26 @@ public class MainActivity extends Activity {
         heading.setText("Nice Java IDE");
         heading.setTextColor(0xFFF9FAFB);
         heading.setTextSize(21);
-        heading.setPadding(dp(4), dp(8), dp(4), dp(10));
+        heading.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
+        heading.setPadding(dp(4), dp(5), dp(4), dp(7));
         root.addView(heading);
+
+        // Windows-style IDE menu bar. Existing toolbar shortcuts remain below it.
+        HorizontalScrollView menuScroll = new HorizontalScrollView(this);
+        menuScroll.setHorizontalScrollBarEnabled(false);
+        menuScroll.setFillViewport(false);
+        LinearLayout menuBar = new LinearLayout(this);
+        menuBar.setOrientation(LinearLayout.HORIZONTAL);
+        menuBar.setBackgroundColor(0xFF1F2937);
+        addMenuButton(menuBar, "File", 1);
+        addMenuButton(menuBar, "Edit", 2);
+        addMenuButton(menuBar, "Search", 3);
+        addMenuButton(menuBar, "View", 4);
+        addMenuButton(menuBar, "Tools", 5);
+        addMenuButton(menuBar, "Run", 6);
+        addMenuButton(menuBar, "Help", 7);
+        menuScroll.addView(menuBar);
+        root.addView(menuScroll);
 
         HorizontalScrollView toolbarScroll = new HorizontalScrollView(this);
         toolbarScroll.setHorizontalScrollBarEnabled(false);
@@ -216,6 +236,132 @@ public class MainActivity extends Activity {
         lastEditorText = next;
         restoringEditor = false;
         status.setText("Redo");
+    }
+
+    private void addMenuButton(LinearLayout bar, String title, int menuId) {
+        Button button = new Button(this);
+        button.setText(title);
+        button.setTextSize(12);
+        button.setAllCaps(false);
+        button.setTextColor(0xFFF9FAFB);
+        button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1F2937));
+        button.setMinWidth(dp(48));
+        button.setPadding(dp(8), 0, dp(8), 0);
+        button.setOnClickListener(view -> showIdeMenu(view, menuId));
+        bar.addView(button, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(42)));
+    }
+
+    private void showIdeMenu(View anchor, int menuId) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        switch (menuId) {
+            case 1: // File
+                popup.getMenu().add("New File").setOnMenuItemClickListener(item -> { newFile(); return true; });
+                popup.getMenu().add("New Kotlin File").setOnMenuItemClickListener(item -> { promptNewKotlinFile(); return true; });
+                popup.getMenu().add("Open File…").setOnMenuItemClickListener(item -> { openDocument(); return true; });
+                popup.getMenu().add("Workspace Files").setOnMenuItemClickListener(item -> { showWorkspaceFiles(); return true; });
+                popup.getMenu().add("Save").setOnMenuItemClickListener(item -> { saveFile(); return true; });
+                popup.getMenu().add("Save As…").setOnMenuItemClickListener(item -> { saveAs(); return true; });
+                popup.getMenu().add("Setup Folders…").setOnMenuItemClickListener(item -> { setupJavaStorage(); return true; });
+                break;
+            case 2: // Edit
+                popup.getMenu().add("Undo").setOnMenuItemClickListener(item -> { undo(); return true; });
+                popup.getMenu().add("Redo").setOnMenuItemClickListener(item -> { redo(); return true; });
+                popup.getMenu().add("Find…").setOnMenuItemClickListener(item -> { showFind(); return true; });
+                popup.getMenu().add("Replace…").setOnMenuItemClickListener(item -> { showReplace(); return true; });
+                popup.getMenu().add("Select All").setOnMenuItemClickListener(item -> { editor.selectAll(); return true; });
+                break;
+            case 3: // Search
+                popup.getMenu().add("Find in Current File…").setOnMenuItemClickListener(item -> { showFind(); return true; });
+                popup.getMenu().add("Find and Replace…").setOnMenuItemClickListener(item -> { showReplace(); return true; });
+                popup.getMenu().add("Workspace Files").setOnMenuItemClickListener(item -> { showWorkspaceFiles(); return true; });
+                break;
+            case 4: // View
+                popup.getMenu().add("Workspace Explorer").setOnMenuItemClickListener(item -> { showWorkspaceFiles(); return true; });
+                popup.getMenu().add("Device / Runtime Info").setOnMenuItemClickListener(item -> { showDeviceInfo(); return true; });
+                popup.getMenu().add("Engine Status").setOnMenuItemClickListener(item -> { showEngineStatus(); return true; });
+                popup.getMenu().add("JDK Details").setOnMenuItemClickListener(item -> { showJdkDetails(); return true; });
+                break;
+            case 5: // Tools
+                popup.getMenu().add("Install OpenJDK 21").setOnMenuItemClickListener(item -> { installBundledJdk(); return true; });
+                popup.getMenu().add("Install Java Project Libraries").setOnMenuItemClickListener(item -> { installJavaProjectLibraries(); return true; });
+                popup.getMenu().add("Java: java").setOnMenuItemClickListener(item -> { runJdkTool("java"); return true; });
+                popup.getMenu().add("Java Compiler: javac").setOnMenuItemClickListener(item -> { runJdkTool("javac"); return true; });
+                popup.getMenu().add("JAR Tool: jar").setOnMenuItemClickListener(item -> { runJdkTool("jar"); return true; });
+                popup.getMenu().add("Javadoc").setOnMenuItemClickListener(item -> { runJdkTool("javadoc"); return true; });
+                popup.getMenu().add("JShell").setOnMenuItemClickListener(item -> { runJdkTool("jshell"); return true; });
+                popup.getMenu().add("Keytool").setOnMenuItemClickListener(item -> { runJdkTool("keytool"); return true; });
+                popup.getMenu().add("Kotlin Compiler").setOnMenuItemClickListener(item -> { runJdkTool("kotlinc"); return true; });
+                popup.getMenu().add("HTML / CSS / JS Preview").setOnMenuItemClickListener(item -> { previewCurrentHtml(); return true; });
+                break;
+            case 6: // Run
+                popup.getMenu().add("Run Current Project").setOnMenuItemClickListener(item -> { runCurrentProject(); return true; });
+                popup.getMenu().add("Preview HTML").setOnMenuItemClickListener(item -> { previewCurrentHtml(); return true; });
+                popup.getMenu().add("Stop / Status").setOnMenuItemClickListener(item -> { showEngineStatus(); return true; });
+                break;
+            case 7: // Help
+                popup.getMenu().add("Supported Languages").setOnMenuItemClickListener(item -> {
+                    showConsoleResult(true, "Supported editor languages: Java, Kotlin (.kt/.kts), HTML, CSS, JavaScript, JSON, XML, Markdown, Python and plain text.\n\nJava/Kotlin execution requires the bundled OpenJDK 21 runtime and Kotlin compiler. HTML/CSS/JS files can be previewed in the built-in WebView.");
+                    return true;
+                });
+                popup.getMenu().add("Supported JDK Tools").setOnMenuItemClickListener(item -> {
+                    showConsoleResult(true, "OpenJDK 21 tools: java, javac, jar, javadoc, jshell, keytool.\nJava project libraries are managed separately for offline projects.");
+                    return true;
+                });
+                popup.getMenu().add("About Nice Java IDE").setOnMenuItemClickListener(item -> {
+                    new android.app.AlertDialog.Builder(this).setTitle("Nice Java IDE")
+                            .setMessage("Offline Java and Kotlin IDE with HTML/CSS/JavaScript preview, OpenJDK 21 tools, project libraries and syntax highlighting.")
+                            .setPositiveButton("OK", null).show();
+                    return true;
+                });
+                break;
+        }
+        popup.show();
+    }
+
+    private void runJdkTool(String toolName) {
+        if (!isJdkInstalled()) {
+            new android.app.AlertDialog.Builder(this).setTitle("OpenJDK 21 required")
+                    .setMessage("Install the bundled OpenJDK 21 before using " + toolName + ".")
+                    .setPositiveButton("Install JDK", (dialog, which) -> installBundledJdk())
+                    .setNegativeButton("Cancel", null).show();
+            return;
+        }
+        EditText argsInput = new EditText(this);
+        argsInput.setSingleLine(false);
+        argsInput.setMinLines(2);
+        argsInput.setHint("Optional command arguments");
+        new android.app.AlertDialog.Builder(this).setTitle("Run " + toolName)
+                .setMessage("Enter arguments (optional):")
+                .setView(argsInput)
+                .setPositiveButton("Run", (dialog, which) -> {
+                    try {
+                        File executable = new File(new File(jdkHome, "bin"), toolName);
+                        if (!executable.exists()) executable = new File(new File(jdkHome, "bin"), toolName + ".exe");
+                        if (!executable.exists()) throw new java.io.IOException(toolName + " is not available in this JDK build.");
+                        List<String> command = new ArrayList<>();
+                        command.add(executable.getAbsolutePath());
+                        String raw = argsInput.getText().toString().trim();
+                        if (!raw.isEmpty()) {
+                            // Deliberately simple whitespace tokenization; quoted shell expressions are not evaluated.
+                            for (String part : raw.split("\\s+")) command.add(part);
+                        }
+                        Process process = new ProcessBuilder(command).directory(workspace).redirectErrorStream(true).start();
+                        ByteArrayOutputStream output = new ByteArrayOutputStream();
+                        try (InputStream input = process.getInputStream()) {
+                            byte[] buffer = new byte[4096]; int count;
+                            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                        }
+                        if (!process.waitFor(30, TimeUnit.SECONDS)) {
+                            process.destroyForcibly();
+                            throw new java.util.concurrent.TimeoutException(toolName + " timed out.");
+                        }
+                        showConsoleResult(process.exitValue() == 0,
+                                "$ " + toolName + (raw.isEmpty() ? "" : " " + raw) + "\n" + output.toString("UTF-8"));
+                    } catch (Exception error) {
+                        showConsoleResult(false, toolName + " error: " + error.getMessage());
+                    }
+                }).setNegativeButton("Cancel", null).show();
     }
 
     private void addTool(LinearLayout bar, String title, View.OnClickListener action) {
