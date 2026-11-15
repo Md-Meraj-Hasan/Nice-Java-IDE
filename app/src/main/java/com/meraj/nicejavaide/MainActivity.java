@@ -181,12 +181,12 @@ public class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface
         public void saveAs() {
-            runOnUiThread(() -> saveAs());
+            runOnUiThread(() -> MainActivity.this.saveAs());
         }
 
         @android.webkit.JavascriptInterface
         public void newFile() {
-            runOnUiThread(() -> newFile());
+            runOnUiThread(() -> MainActivity.this.newFile());
         }
 
         @android.webkit.JavascriptInterface
