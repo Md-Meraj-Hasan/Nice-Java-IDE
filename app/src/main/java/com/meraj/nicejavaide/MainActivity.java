@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
             "    public static void main(String[] args) {\n" +
             "        System.out.println(\"Hello from Nice Java IDE!\");\n" +
             "    }\n" +
-            "}\\n";
+            "}\n";
 
     private EditText editor;
     private TextView status;
@@ -195,7 +195,7 @@ public class MainActivity extends Activity {
                         if (!targetPath.startsWith(rootPath)) throw new IllegalArgumentException("Invalid file path");
                         if (target.exists()) throw new IllegalArgumentException("File already exists");
                         writeText(target, "public class " + target.getName().replace(".java", "") +
-                                " {\\n    public static void main(String[] args) {\\n    }\\n}\\n");
+                                " {\n    public static void main(String[] args) {\n    }\n}\n");
                         openWorkspaceFile(target);
                     } catch (Exception e) {
                         status.setText("Create error: " + e.getMessage());
