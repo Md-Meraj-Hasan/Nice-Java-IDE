@@ -30,6 +30,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -1000,11 +1002,169 @@ public class MainActivity extends Activity {
         }
     }
 
+
+    private File getKotlinCompilerHome() {
+        return new File(getFilesDir(), "kotlin-compiler/kotlinc");
+    }
+
+    private boolean isKotlinCompilerInstalled() {
+        File home = getKotlinCompilerHome();
+        return new File(home, "lib/kotlin-compiler.jar").isFile()
+                && new File(home, "lib/kotlin-stdlib.jar").isFile();
+    }
+
+    private File ensureKotlinCompilerInstalled() throws Exception {
+        if (isKotlinCompilerInstalled()) return getKotlinCompilerHome();
+        File destination = new File(getFilesDir(), "kotlin-compiler");
+        File staging = new File(getFilesDir(), "kotlin-compiler-installing");
+        long free = new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes();
+        if (free < 450L * 1024L * 1024L) {
+            throw new IllegalStateException("At least 450 MB free internal storage is required to extract the offline Kotlin compiler.");
+        }
+        deleteTree(staging);
+        if (!staging.mkdirs()) throw new IllegalStateException("Cannot create Kotlin compiler folder.");
+        try (InputStream raw = getAssets().open("kotlin-compiler-2.4.21.zip");
+             ZipInputStream zip = new ZipInputStream(raw)) {
+            ZipEntry entry;
+            byte[] buffer = new byte[64 * 1024];
+            String base = staging.getCanonicalPath() + File.separator;
+            while ((entry = zip.getNextEntry()) != null) {
+                File output = new File(staging, entry.getName()).getCanonicalFile();
+                if (!output.getPath().startsWith(base)) {
+                    throw new SecurityException("Unsafe path in Kotlin compiler archive.");
+                }
+                if (entry.isDirectory()) {
+                    if (!output.exists() && !output.mkdirs()) {
+                        throw new IllegalStateException("Cannot create compiler folder: " + entry.getName());
+                    }
+                } else {
+                    File parent = output.getParentFile();
+                    if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                        throw new IllegalStateException("Cannot create compiler folder.");
+                    }
+                    try (FileOutputStream fileOut = new FileOutputStream(output)) {
+                        int count;
+                        while ((count = zip.read(buffer)) != -1) fileOut.write(buffer, 0, count);
+                    }
+                }
+                zip.closeEntry();
+            }
+        } catch (Exception e) {
+            deleteTree(staging);
+            throw e;
+        }
+        File stagedHome = new File(staging, "kotlinc");
+        if (!new File(stagedHome, "lib/kotlin-compiler.jar").isFile()
+                || !new File(stagedHome, "lib/kotlin-stdlib.jar").isFile()) {
+            deleteTree(staging);
+            throw new IllegalStateException("The bundled Kotlin compiler archive is incomplete.");
+        }
+        deleteTree(destination);
+        if (!staging.renameTo(destination)) {
+            deleteTree(staging);
+            throw new IllegalStateException("Cannot activate the extracted Kotlin compiler.");
+        }
+        return getKotlinCompilerHome();
+    }
+
+    private void runKotlinProject() {
+        if (!isJdkInstalled()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("OpenJDK 21 is not installed")
+                    .setMessage("Install the bundled OpenJDK 21 first. Kotlin/JVM uses this offline runtime to compile and run programs.")
+                    .setPositiveButton("Install JDK", (dialog, which) -> installBundledJdk())
+                    .setNegativeButton("Cancel", null).show();
+            return;
+        }
+        status.setText("Preparing offline Kotlin compiler…");
+        new Thread(() -> {
+            boolean success = false;
+            String report;
+            try {
+                saveCurrentBeforeSwitch();
+                if (currentUri != null || currentFile == null) {
+                    throw new IllegalStateException("Save the Kotlin file inside Workspace before running.");
+                }
+                File compilerHome = ensureKotlinCompilerInstalled();
+                File compilerLib = new File(compilerHome, "lib");
+                String compilerClassPath = new File(compilerLib, "*").getAbsolutePath();
+                String extension = getCurrentExtension();
+                if ("kts".equals(extension)) {
+                    String output = runJdkCommand(new File(jdkHome, "bin/java"), 120,
+                            "-cp", compilerClassPath,
+                            "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+                            "-kotlin-home", compilerHome.getAbsolutePath(),
+                            "-script", currentFile.getAbsolutePath());
+                    success = true;
+                    report = "KOTLIN SCRIPT SUCCESSFUL\n\n" +
+                            (output.isEmpty() ? "(Script finished with no output)" : output);
+                } else {
+                    List<File> sources = new ArrayList<>();
+                    collectKotlinFiles(workspace, sources);
+                    if (sources.isEmpty()) throw new IllegalStateException("No .kt source files found in Workspace.");
+                    File buildDirectory = new File(getFilesDir(), "kotlin-build");
+                    if (!buildDirectory.exists() && !buildDirectory.mkdirs()) {
+                        throw new IllegalStateException("Cannot create Kotlin build folder.");
+                    }
+                    File outputJar = new File(buildDirectory, "nice-kotlin-program.jar");
+                    if (outputJar.exists() && !outputJar.delete()) {
+                        throw new IllegalStateException("Cannot replace previous Kotlin build output.");
+                    }
+                    List<String> compilerArgs = new ArrayList<>();
+                    compilerArgs.add("-kotlin-home");
+                    compilerArgs.add(compilerHome.getAbsolutePath());
+                    compilerArgs.add("-include-runtime");
+                    compilerArgs.add("-d");
+                    compilerArgs.add(outputJar.getAbsolutePath());
+                    for (File source : sources) compilerArgs.add(source.getAbsolutePath());
+                    List<String> command = new ArrayList<>();
+                    command.add("-cp");
+                    command.add(compilerClassPath);
+                    command.add("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler");
+                    command.addAll(compilerArgs);
+                    runJdkCommand(new File(jdkHome, "bin/java"), 180, command.toArray(new String[0]));
+
+                    String sourceText = readText(currentFile);
+                    java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
+                            .compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)")
+                            .matcher(sourceText);
+                    String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
+                    String fileName = currentFile.getName();
+                    String className = fileName.substring(0, fileName.length() - 3) + "Kt";
+                    String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
+                    String output = runJdkCommand(new File(jdkHome, "bin/java"), 60,
+                            "-Dfile.encoding=UTF-8", "-cp", outputJar.getAbsolutePath(), mainClass);
+                    success = true;
+                    report = "KOTLIN BUILD SUCCESSFUL\n" + sources.size() +
+                            " Kotlin source file(s) compiled.\n\nRUN: " + mainClass + "\n\n" +
+                            (output.isEmpty() ? "(Program finished with no output)" : output);
+                }
+            } catch (Exception e) {
+                report = "KOTLIN BUILD / RUN FAILED\n\n" + e.getMessage();
+            }
+            final boolean ok = success;
+            final String result = report;
+            runOnUiThread(() -> {
+                status.setText(ok ? "Kotlin program finished successfully" : "Kotlin compile/run failed");
+                showConsoleResult(ok, result);
+            });
+        }, "NiceKotlin-CompileRun").start();
+    }
+
+    private void collectKotlinFiles(File folder, List<File> output) {
+        File[] children = folder.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child.isDirectory()) collectKotlinFiles(child, output);
+            else if (child.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".kt")) output.add(child);
+        }
+    }
+
     private void runCurrentProject() {
         if (!"java".equals(getCurrentExtension())) {
             String ext = getCurrentExtension();
             if ("kt".equals(ext) || "kts".equals(ext)) {
-                status.setText("Kotlin editor is ready. Kotlin compiler/runtime integration is the next build step.");
+                runKotlinProject();
                 return;
             }
             if ("html".equals(ext) || "htm".equals(ext) || "css".equals(ext) || "js".equals(ext)) {
@@ -1136,6 +1296,10 @@ public class MainActivity extends Activity {
     }
 
     private String runJdkCommand(File executable, String... args) throws Exception {
+        return runJdkCommand(executable, 30, args);
+    }
+
+    private String runJdkCommand(File executable, int timeoutSeconds, String... args) throws Exception {
         if (!executable.isFile() || !executable.canExecute()) {
             throw new IllegalStateException("JDK executable is missing or not executable: " + executable.getAbsolutePath());
         }
@@ -1157,9 +1321,9 @@ public class MainActivity extends Activity {
             String line;
             while ((line = reader.readLine()) != null) output.append(line).append('\n');
         }
-        if (!process.waitFor(30, TimeUnit.SECONDS)) {
+        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
             process.destroyForcibly();
-            throw new IllegalStateException("JDK command timed out after 30 seconds: " + executable.getName());
+            throw new IllegalStateException("JDK command timed out after " + timeoutSeconds + " seconds: " + executable.getName());
         }
         if (process.exitValue() != 0) {
             throw new IllegalStateException(executable.getName() + " exited with code " + process.exitValue() + ": " + output);
