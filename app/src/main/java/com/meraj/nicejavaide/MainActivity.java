@@ -135,7 +135,7 @@ public class MainActivity extends Activity {
         ideWebView.loadUrl("file:///android_asset/ide/index.html");
     }
 
-    private final class NiceIdeBridge {
+    public final class NiceIdeBridge {
         @android.webkit.JavascriptInterface
         public String initialCode() {
             return editor == null ? STARTER : editor.getText().toString();
