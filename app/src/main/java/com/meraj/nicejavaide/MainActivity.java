@@ -444,7 +444,7 @@ public class MainActivity extends Activity {
                     String name = nameInput.getText().toString().trim();
                     if (name.isEmpty()) name = "Main.kt";
                     if (!name.matches("(?i).+\\.(kt|kts)$")) name += ".kt";
-                    if (name.contains("/") || name.contains("\\\\")) {
+                    if (name.contains("/") || name.contains("\\\")) {
                         status.setText("Use a file name without folder separators");
                         return;
                     }
@@ -452,8 +452,8 @@ public class MainActivity extends Activity {
                     try {
                         if (target.exists()) throw new IllegalArgumentException("File already exists");
                         String starter = name.toLowerCase(java.util.Locale.ROOT).endsWith(".kts")
-                                ? "println(\\"Hello from Kotlin Script!\\")\\n"
-                                : "fun main() {\\n    println(\\"Hello from Nice Kotlin IDE!\\")\\n}\\n";
+                                ? "println(\"Hello from Kotlin Script!\")\n"
+                                : "fun main() {\n    println(\"Hello from Nice Kotlin IDE!\")\n}\n";
                         writeText(target, starter);
                         openWorkspaceFile(target);
                         status.setText("Kotlin file created • compiler integration is being prepared");
