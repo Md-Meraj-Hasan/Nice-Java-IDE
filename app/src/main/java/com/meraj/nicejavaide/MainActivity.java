@@ -657,15 +657,15 @@ public class MainActivity extends Activity {
                 String javaVersion = runJdkCommand(new File(jdkHome, "bin/java"), "-version");
                 String javacVersion = runJdkCommand(new File(jdkHome, "bin/javac"), "-version");
                 File source = new File(testDir, "HelloNice.java");
-                writeText(source, "public class HelloNice { public static void main(String[] a) { System.out.println(\\"NICE_JAVA_RUNTIME_OK\\"); } }");
+                writeText(source, "public class HelloNice { public static void main(String[] a) { System.out.println(\"NICE_JAVA_RUNTIME_OK\"); } }");
                 String compileOutput = runJdkCommand(new File(jdkHome, "bin/javac"), "-d", testDir.getAbsolutePath(), source.getAbsolutePath());
                 String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-cp", testDir.getAbsolutePath(), "HelloNice");
                 if (!runOutput.contains("NICE_JAVA_RUNTIME_OK")) throw new IllegalStateException("Compiled program output did not match expected result: " + runOutput);
                 passed = true;
-                report = "OpenJDK 21 native test: PASSED\\n\\n" + javaVersion + "\\n" + javacVersion +
-                        "\\nCompile: successful\\nRun output: NICE_JAVA_RUNTIME_OK";
+                report = "OpenJDK 21 native test: PASSED\n\n" + javaVersion + "\n" + javacVersion +
+                        "\nCompile: successful\nRun output: NICE_JAVA_RUNTIME_OK";
             } catch (Exception e) {
-                report = "OpenJDK 21 native test: FAILED\\n\\n" + e.getClass().getSimpleName() + ": " + e.getMessage();
+                report = "OpenJDK 21 native test: FAILED\n\n" + e.getClass().getSimpleName() + ": " + e.getMessage();
             } finally {
                 deleteTree(testDir);
             }
@@ -699,7 +699,7 @@ public class MainActivity extends Activity {
         StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
-            while ((line = reader.readLine()) != null) output.append(line).append('\\n');
+            while ((line = reader.readLine()) != null) output.append(line).append('\n');
         }
         if (!process.waitFor(30, TimeUnit.SECONDS)) {
             process.destroyForcibly();
