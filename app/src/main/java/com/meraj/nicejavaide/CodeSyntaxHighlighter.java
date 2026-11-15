@@ -25,7 +25,13 @@ public final class CodeSyntaxHighlighter {
         ForegroundColorSpan[] old = text.getSpans(0, text.length(), ForegroundColorSpan.class);
         for (ForegroundColorSpan span : old) text.removeSpan(span);
         String source = text.toString();
-        if ("html".equals(extension) || "htm".equals(extension) || "xml".equals(extension)) {
+        if ("kt".equals(extension) || "kts".equals(extension)) {
+            paint(text, source, "/\\*[\\s\\S]*?\\*/|(?m)//.*$", COMMENT);
+            paint(text, source, "\"\"\"[\\s\\S]*?\"\"\"|\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'", STRING);
+            paint(text, source, "@[A-Za-z_][\\w.]*", ATTRIBUTE);
+            paint(text, source, "\\b(package|import|as|class|interface|object|enum|annotation|data|sealed|open|abstract|final|override|private|protected|public|internal|inline|infix|operator|suspend|tailrec|const|lateinit|vararg|noinline|crossinline|fun|val|var|typealias|constructor|init|this|super|return|break|continue|throw|try|catch|finally|if|else|when|for|while|do|is|!is|in|!in|as\\?|typeof|by|where|out|reified|companion|expect|actual|external|dynamic|true|false|null)\\b", KEYWORD);
+            paint(text, source, "\\b\\d+(?:\\.\\d+)?[fFdDlLuU]*\\b", NUMBER);
+        } else if ("html".equals(extension) || "htm".equals(extension) || "xml".equals(extension)) {
             paint(text, source, "<!--[\\s\\S]*?-->", COMMENT);
             paint(text, source, "</?[A-Za-z][^>]*?>", TAG);
             paint(text, source, "\\b[A-Za-z_:][-A-Za-z0-9_:.]*(?=\\s*=)", ATTRIBUTE);
