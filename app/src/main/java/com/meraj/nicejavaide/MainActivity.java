@@ -1068,22 +1068,32 @@ public class MainActivity extends Activity {
     }
 
     private InputStream openBundledJdkArchive() throws Exception {
-        final String expected = "jdk21-android.tar.gz";
-        try {
-            return getAssets().open(expected);
-        } catch (java.io.FileNotFoundException missing) {
-            String[] rootAssets = getAssets().list("");
-            StringBuilder found = new StringBuilder();
-            if (rootAssets != null) {
-                for (String asset : rootAssets) {
-                    if (found.length() > 0) found.append(", ");
-                    found.append(asset);
-                }
+        // Android Gradle may normalize the asset entry name from .tar.gz to .tar.
+        // The bytes remain the original gzip-compressed TAR, so extraction still
+        // uses GzipCompressorInputStream below for either asset name.
+        final String[] candidates = {"jdk21-android.tar.gz", "jdk21-android.tar"};
+        java.io.FileNotFoundException lastMissing = null;
+        for (String candidate : candidates) {
+            try {
+                return getAssets().open(candidate);
+            } catch (java.io.FileNotFoundException missing) {
+                lastMissing = missing;
             }
-            throw new java.io.FileNotFoundException(
-                    "Bundled JDK archive is missing from this APK: assets/" + expected +
-                    ". APK root assets: [" + found + "]. Rebuild APK after checking the JDK asset packaging task.");
         }
+
+        String[] rootAssets = getAssets().list("");
+        StringBuilder found = new StringBuilder();
+        if (rootAssets != null) {
+            for (String asset : rootAssets) {
+                if (found.length() > 0) found.append(", ");
+                found.append(asset);
+            }
+        }
+        java.io.FileNotFoundException error = new java.io.FileNotFoundException(
+                "Bundled JDK archive not found. Tried assets/jdk21-android.tar.gz and " +
+                "assets/jdk21-android.tar. APK root assets: [" + found + "]");
+        if (lastMissing != null) error.initCause(lastMissing);
+        throw error;
     }
 
     private File findJdkHome(File folder, int depth) {
