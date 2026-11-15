@@ -164,7 +164,7 @@ public class MainActivity extends Activity {
                     saveCurrentBeforeSwitch();
                     runCurrentProject();
                 } catch (Exception e) {
-                    showError("Unable to prepare code for running: " + e.getMessage());
+                    showConsoleResult(false, "Unable to prepare code for running: " + e.getMessage());
                 }
             });
         }
