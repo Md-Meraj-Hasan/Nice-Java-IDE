@@ -27,11 +27,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.LinkOption;
-
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -519,9 +514,15 @@ public class MainActivity extends Activity {
                         } else if (entry.isSymbolicLink()) {
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create link folder");
-                            Path linkTarget = Paths.get(entry.getLinkName());
-                            if (linkTarget.isAbsolute()) throw new SecurityException("Absolute symlink in JDK archive");
-                            Files.createSymbolicLink(output.toPath(), linkTarget);
+                            File resolvedTarget = new File(parent, entry.getLinkName()).getCanonicalFile();
+                            if (!resolvedTarget.getPath().startsWith(staging.getCanonicalPath() + File.separator)) throw new SecurityException("Unsafe symlink in JDK archive");
+                            android.system.Os.symlink(entry.getLinkName(), output.getAbsolutePath());
+                        } else if (entry.isLink()) {
+                            File target = new File(staging, entry.getLinkName()).getCanonicalFile();
+                            if (!target.getPath().startsWith(staging.getCanonicalPath() + File.separator) || !target.exists()) throw new SecurityException("Unsafe or missing hardlink target");
+                            File parent = output.getParentFile();
+                            if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create hardlink folder");
+                            android.system.Os.link(target.getAbsolutePath(), output.getAbsolutePath());
                         } else if (entry.isFile()) {
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create " + parent);
