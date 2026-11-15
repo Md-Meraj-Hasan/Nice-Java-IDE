@@ -98,7 +98,7 @@ public class MainActivity extends Activity {
         addTool(toolbar, "Redo", v -> redo());
         addTool(toolbar, "Device", v -> showDeviceInfo());
         addTool(toolbar, "Install JDK", v -> installBundledJdk());
-        addTool(toolbar, "Run", v -> showEngineStatus());
+        addTool(toolbar, "Run", v -> runCurrentProject());
         toolbarScroll.addView(toolbar);
         root.addView(toolbarScroll);
 
@@ -634,6 +634,81 @@ public class MainActivity extends Activity {
                 .setTitle("Device compatibility")
                 .setMessage(report)
                 .setPositiveButton("OK", null)
+                .show();
+    }
+
+    private void runCurrentProject() {
+        if (!isJdkInstalled()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("OpenJDK 21 is not installed")
+                    .setMessage("Tap Install JDK first. The full toolchain is bundled offline in this APK.")
+                    .setPositiveButton("Install JDK", (dialog, which) -> installBundledJdk())
+                    .setNegativeButton("Cancel", null).show();
+            return;
+        }
+        status.setText("Saving and compiling Java project…");
+        new Thread(() -> {
+            String report;
+            boolean success = false;
+            File classes = new File(getFilesDir(), "java-build/classes");
+            try {
+                saveCurrentBeforeSwitch();
+                if (currentUri != null) throw new IllegalStateException("Run a Java file saved inside Workspace. Use Save As into Workspace first.");
+                List<File> sources = new ArrayList<>();
+                collectJavaFiles(workspace, sources);
+                if (sources.isEmpty()) throw new IllegalStateException("No .java source files found in Workspace.");
+                deleteTree(classes);
+                if (!classes.mkdirs()) throw new IllegalStateException("Cannot create build output folder.");
+                List<String> compileArgs = new ArrayList<>();
+                compileArgs.add("-encoding");
+                compileArgs.add("UTF-8");
+                compileArgs.add("-d");
+                compileArgs.add(classes.getAbsolutePath());
+                for (File source : sources) compileArgs.add(source.getAbsolutePath());
+                String compileOutput = runJdkCommand(new File(jdkHome, "bin/javac"), compileArgs.toArray(new String[0]));
+                String sourceText = readText(currentFile);
+                java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
+                        .compile("(?m)^\\\\s*package\\\\s+([A-Za-z_$][\\\\w$]*(?:\\\\.[A-Za-z_$][\\\\w$]*)*)\\\\s*;")
+                        .matcher(sourceText);
+                String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
+                java.util.regex.Matcher classMatcher = java.util.regex.Pattern
+                        .compile("(?m)\\\\bpublic\\\\s+(?:(?:abstract|final|sealed|non-sealed)\\\\s+)*(?:class|interface|enum|record)\\\\s+([A-Za-z_$][\\\\w$]*)")
+                        .matcher(sourceText);
+                String className = classMatcher.find() ? classMatcher.group(1) :
+                        currentFile.getName().substring(0, currentFile.getName().length() - 5);
+                String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
+                String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-Dfile.encoding=UTF-8",
+                        "-cp", classes.getAbsolutePath(), mainClass);
+                success = true;
+                report = "BUILD SUCCESSFUL\\n" + sources.size() + " Java source file(s) compiled.\\n\\n" +
+                        "RUN: " + mainClass + "\\n\\n" + (runOutput.isEmpty() ? "(Program finished with no output)" : runOutput);
+            } catch (Exception e) {
+                report = "BUILD / RUN FAILED\\n\\n" + e.getMessage();
+            }
+            final boolean ok = success;
+            final String result = report;
+            runOnUiThread(() -> {
+                status.setText(ok ? "Program finished successfully" : "Java compile/run failed");
+                showConsoleResult(ok, result);
+            });
+        }, "NiceJava-CompileRun").start();
+    }
+
+    private void showConsoleResult(boolean success, String output) {
+        TextView console = new TextView(this);
+        console.setText(output);
+        console.setTextIsSelectable(true);
+        console.setTextColor(0xFFE5E7EB);
+        console.setTextSize(13);
+        console.setTypeface(android.graphics.Typeface.MONOSPACE);
+        console.setPadding(dp(14), dp(12), dp(14), dp(12));
+        console.setBackgroundColor(0xFF0B1220);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.addView(console);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(success ? "Run Console • Success" : "Run Console • Error")
+                .setView(scroll)
+                .setPositiveButton("Close", null)
                 .show();
     }
 
