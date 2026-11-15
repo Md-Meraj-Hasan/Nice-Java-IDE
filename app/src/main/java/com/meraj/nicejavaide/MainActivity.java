@@ -212,12 +212,7 @@ public class MainActivity extends Activity {
     }
 
     private void newFile() {
-        currentFile = new File(workspace, "Untitled.java");
-        currentUri = null;
-        addOpenTab(currentFile);
-        setEditorText("public class Untitled {\n    public static void main(String[] args) {\n    }\n}\n");
-        updateFileLabel();
-        status.setText("New file • use Save or Save As");
+        promptNewWorkspaceFile();
     }
 
     private void showWorkspaceFiles() {
@@ -225,13 +220,13 @@ public class MainActivity extends Activity {
         collectWorkspaceFiles(workspace, files);
         java.util.Collections.sort(files, (a, b) -> a.getAbsolutePath().compareToIgnoreCase(b.getAbsolutePath()));
         String[] names = new String[files.size() + 1];
-        names[0] = "+  Create new Java file";
+        names[0] = "+  Create new code file";
         for (int i = 0; i < files.size(); i++) {
             String relative = workspace.toURI().relativize(files.get(i).toURI()).getPath();
             names[i + 1] = relative;
         }
         new android.app.AlertDialog.Builder(this)
-                .setTitle("Workspace • Java files")
+                .setTitle("Workspace • Code files")
                 .setItems(names, (dialog, which) -> {
                     if (which == 0) promptNewWorkspaceFile();
                     else openWorkspaceFile(files.get(which - 1));
@@ -289,14 +284,14 @@ public class MainActivity extends Activity {
     private void promptNewWorkspaceFile() {
         EditText nameInput = new EditText(this);
         nameInput.setSingleLine(true);
-        nameInput.setHint("Example: Main.java or app/Utils.java");
+        nameInput.setHint("Main.java, index.html, style.css, app.js");
         new android.app.AlertDialog.Builder(this)
-                .setTitle("Create Java file")
+                .setTitle("Create code file")
                 .setView(nameInput)
                 .setPositiveButton("Create", (dialog, which) -> {
                     String relative = nameInput.getText().toString().trim();
                     if (relative.isEmpty()) return;
-                    if (!relative.endsWith(".java")) relative += ".java";
+                    if (!relative.matches("(?i).+\\.(java|html|htm|css|js|json|xml|md|txt|py)$")) relative += ".java";
                     File target = new File(workspace, relative).getAbsoluteFile();
                     try {
                         String rootPath = workspace.getCanonicalPath() + File.separator;
