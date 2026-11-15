@@ -444,7 +444,7 @@ public class MainActivity extends Activity {
                     String name = nameInput.getText().toString().trim();
                     if (name.isEmpty()) name = "Main.kt";
                     if (!name.matches("(?i).+\\.(kt|kts)$")) name += ".kt";
-                    if (name.contains("/") || name.contains("\\\")) {
+                    if (name.contains("/") || name.contains("\\\\")) {
                         status.setText("Use a file name without folder separators");
                         return;
                     }
