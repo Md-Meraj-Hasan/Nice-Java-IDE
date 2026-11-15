@@ -6,6 +6,10 @@ android {
     namespace 'com.meraj.nicejavaide'
     compileSdk 35
 
+    androidResources {
+        noCompress += ['gz']
+    }
+
     defaultConfig {
         applicationId 'com.meraj.nicejavaide'
         minSdk 24
@@ -21,8 +25,63 @@ android {
 }
 
 dependencies {
+    implementation 'org.apache.commons:commons-compress:1.27.1'
     implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'com.google.android.material:material:1.13.0'
     implementation 'androidx.activity:activity:1.10.1'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
+}
+
+def jdkArchive = layout.projectDirectory.file('src/main/assets/jdk21-android.tar.gz')
+def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.4/jdk21-android.tar.gz'
+def jdkSha256 = '9e38b66557db40481d90a6f5cfbce05180414e3131a6b77c4dea1304fcba6e9b'
+
+tasks.register('downloadOpenJdk21') {
+    outputs.file(jdkArchive)
+    doLast {
+        def archiveFile = jdkArchive.asFile
+        if (archiveFile.exists()) {
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            archiveFile.withInputStream { input ->
+                byte[] buffer = new byte[1024 * 1024]
+                int count
+                while ((count = input.read(buffer)) > 0) digest.update(buffer, 0, count)
+            }
+            def actual = digest.digest().collect { String.format('%02x', it) }.join()
+            if (actual == jdkSha256) {
+                logger.lifecycle("Verified cached OpenJDK 21 archive")
+                return
+            }
+            archiveFile.delete()
+        }
+        archiveFile.parentFile.mkdirs()
+        def tempFile = new File(archiveFile.parentFile, archiveFile.name + '.part')
+        logger.lifecycle("Downloading full OpenJDK 21 ARM64 archive (~312 MB)")
+        new URL(jdkUrl).withInputStream { input ->
+            tempFile.withOutputStream { output ->
+                byte[] buffer = new byte[1024 * 1024]
+                int count
+                while ((count = input.read(buffer)) > 0) output.write(buffer, 0, count)
+            }
+        }
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+        tempFile.withInputStream { input ->
+            byte[] buffer = new byte[1024 * 1024]
+            int count
+            while ((count = input.read(buffer)) > 0) digest.update(buffer, 0, count)
+        }
+        def actual = digest.digest().collect { String.format('%02x', it) }.join()
+        if (actual != jdkSha256) {
+            tempFile.delete()
+            throw new GradleException("OpenJDK 21 SHA-256 mismatch: " + actual)
+        }
+        if (!tempFile.renameTo(archiveFile)) {
+            tempFile.delete()
+            throw new GradleException("Could not place verified OpenJDK 21 archive")
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('downloadOpenJdk21')
 }
