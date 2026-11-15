@@ -16,6 +16,8 @@ import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.webkit.WebView;
+import android.webkit.WebSettings;
 
 import java.io.ByteArrayOutputStream;
 import java.io.BufferedReader;
@@ -100,6 +102,7 @@ public class MainActivity extends Activity {
         addTool(toolbar, "Install JDK", v -> installBundledJdk());
         addTool(toolbar, "Libraries", v -> installJavaProjectLibraries());
         addTool(toolbar, "Run", v -> runCurrentProject());
+        addTool(toolbar, "Preview", v -> previewCurrentHtml());
         toolbarScroll.addView(toolbar);
         root.addView(toolbarScroll);
 
@@ -122,7 +125,7 @@ public class MainActivity extends Activity {
         editor.setTypeface(android.graphics.Typeface.MONOSPACE);
         editor.setTextColor(0xFFE5E7EB);
         editor.setHintTextColor(0xFF6B7280);
-        editor.setHint("Write Java code here...");
+        editor.setHint("Write code here...");
         editor.setBackgroundColor(0xFF0B1220);
         editor.setPadding(dp(12), dp(12), dp(12), dp(12));
         editor.setHorizontallyScrolling(true);
@@ -139,7 +142,7 @@ public class MainActivity extends Activity {
                     redoStack.clear();
                     lastEditorText = current;
                 }
-                JavaSyntaxHighlighter.apply(editable);
+                CodeSyntaxHighlighter.apply(editable, getCurrentExtension());
             }
         });
         LinearLayout.LayoutParams editorParams = new LinearLayout.LayoutParams(
