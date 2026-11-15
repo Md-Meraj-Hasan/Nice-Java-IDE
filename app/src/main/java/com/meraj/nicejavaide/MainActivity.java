@@ -1,6 +1,8 @@
 package com.meraj.nicejavaide;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -10,26 +12,32 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
+    private static final int REQUEST_OPEN = 101;
+    private static final int REQUEST_SAVE_AS = 102;
+    private static final String STARTER = "public class Main {\\n" +
+            "    public static void main(String[] args) {\\n" +
+            "        System.out.println(\\"Hello from Nice Java IDE!\\");\\n" +
+            "    }\\n" +
+            "}\\n";
+
     private EditText editor;
     private TextView status;
+    private TextView fileLabel;
     private File workspace;
     private File currentFile;
-
-    private static final String STARTER = "public class Main {\n" +
-            "    public static void main(String[] args) {\n" +
-            "        System.out.println(\"Hello from Nice Java IDE!\");\n" +
-            "    }\n" +
-            "}\n";
+    private Uri currentUri;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -61,15 +69,15 @@ public class MainActivity extends Activity {
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         addTool(toolbar, "New", v -> newFile());
-        addTool(toolbar, "Open", v -> openStarter());
+        addTool(toolbar, "Open", v -> openDocument());
         addTool(toolbar, "Save", v -> saveFile());
+        addTool(toolbar, "Save As", v -> saveAs());
         addTool(toolbar, "Find", v -> showFind());
         addTool(toolbar, "Run", v -> showEngineStatus());
         toolbarScroll.addView(toolbar);
         root.addView(toolbarScroll);
 
-        TextView fileLabel = new TextView(this);
-        fileLabel.setText("WORKSPACE  /  Main.java");
+        fileLabel = new TextView(this);
         fileLabel.setTextColor(0xFF93C5FD);
         fileLabel.setTextSize(12);
         fileLabel.setPadding(dp(5), dp(12), dp(5), dp(6));
@@ -100,13 +108,13 @@ public class MainActivity extends Activity {
         root.addView(editor, editorParams);
 
         status = new TextView(this);
-        status.setText("Offline workspace ready • Compiler engine not installed yet");
         status.setTextColor(0xFFFBBF24);
         status.setTextSize(11);
         status.setPadding(dp(5), dp(10), dp(5), dp(4));
         root.addView(status);
-
         setContentView(root);
+        updateFileLabel();
+        status.setText("Offline workspace ready • JDK integration in progress");
     }
 
     private void addTool(LinearLayout bar, String title, View.OnClickListener action) {
@@ -120,22 +128,78 @@ public class MainActivity extends Activity {
 
     private void newFile() {
         currentFile = new File(workspace, "Untitled.java");
-        editor.setText("public class Untitled {\n    public static void main(String[] args) {\n    }\n}\n");
-        status.setText("New file • Save to workspace");
+        currentUri = null;
+        editor.setText("public class Untitled {\\n    public static void main(String[] args) {\\n    }\\n}\\n");
+        updateFileLabel();
+        status.setText("New file • use Save or Save As");
     }
 
-    private void openStarter() {
-        File candidate = new File(workspace, "Main.java");
-        currentFile = candidate;
-        loadCurrentFile();
+    private void openDocument() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/x-java", "text/plain", "application/octet-stream"});
+        startActivityForResult(intent, REQUEST_OPEN);
+    }
+
+    private void saveAs() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/x-java");
+        intent.putExtra(Intent.EXTRA_TITLE, currentFile == null ? "Main.java" : currentFile.getName());
+        startActivityForResult(intent, REQUEST_SAVE_AS);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        Uri uri = data.getData();
+        try {
+            getContentResolver().takePersistableUriPermission(uri,
+                    data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION));
+            if (requestCode == REQUEST_OPEN) {
+                currentUri = uri;
+                currentFile = new File(workspace, "External.java");
+                editor.setText(readUri(uri));
+                status.setText("Opened external Java file");
+                updateFileLabel();
+            } else if (requestCode == REQUEST_SAVE_AS) {
+                currentUri = uri;
+                writeUri(uri, editor.getText().toString());
+                status.setText("Saved using Android file picker");
+                updateFileLabel();
+            }
+        } catch (SecurityException ignored) {
+            handlePickedUri(requestCode, uri);
+        } catch (Exception e) {
+            status.setText("File error: " + e.getMessage());
+        }
+    }
+
+    private void handlePickedUri(int requestCode, Uri uri) {
+        try {
+            if (requestCode == REQUEST_OPEN) {
+                currentUri = uri;
+                currentFile = new File(workspace, "External.java");
+                editor.setText(readUri(uri));
+                status.setText("Opened external Java file");
+            } else if (requestCode == REQUEST_SAVE_AS) {
+                currentUri = uri;
+                writeUri(uri, editor.getText().toString());
+                status.setText("Saved using Android file picker");
+            }
+            updateFileLabel();
+        } catch (Exception e) {
+            status.setText("File error: " + e.getMessage());
+        }
     }
 
     private void loadCurrentFile() {
         try {
-            if (!currentFile.exists()) {
-                writeText(currentFile, STARTER);
-            }
+            if (!currentFile.exists()) writeText(currentFile, STARTER);
             editor.setText(readText(currentFile));
+            updateFileLabel();
             status.setText("Opened: " + currentFile.getName());
         } catch (Exception e) {
             status.setText("Open error: " + e.getMessage());
@@ -144,9 +208,14 @@ public class MainActivity extends Activity {
 
     private void saveFile() {
         try {
-            writeText(currentFile, editor.getText().toString());
-            status.setText("Saved: " + currentFile.getName());
-            Toast.makeText(this, "Saved to app workspace", Toast.LENGTH_SHORT).show();
+            if (currentUri != null) {
+                writeUri(currentUri, editor.getText().toString());
+                status.setText("Saved external file");
+            } else {
+                writeText(currentFile, editor.getText().toString());
+                status.setText("Saved: " + currentFile.getName());
+            }
+            Toast.makeText(this, "File saved", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             status.setText("Save error: " + e.getMessage());
         }
@@ -180,24 +249,52 @@ public class MainActivity extends Activity {
 
     private void showEngineStatus() {
         new android.app.AlertDialog.Builder(this)
-                .setTitle("Java engine not installed")
-                .setMessage("The editor and local workspace are available. Offline Java compilation and execution are not enabled in this scaffold yet. The compiler/runtime must be bundled and verified before Run can execute code.")
+                .setTitle("OpenJDK 21 integration in progress")
+                .setMessage("The editor can open and save Java files. Offline javac/java execution will be enabled after the bundled ARM64 JDK passes Android runtime checks.")
                 .setPositiveButton("OK", null)
                 .show();
     }
 
+    private void updateFileLabel() {
+        if (fileLabel == null) return;
+        String name = currentUri != null ? "External Java file" :
+                (currentFile == null ? "Untitled.java" : currentFile.getName());
+        fileLabel.setText("WORKSPACE  /  " + name);
+    }
+
+    private String readUri(Uri uri) throws Exception {
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            if (in == null) throw new IllegalStateException("Cannot open selected file");
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+            return out.toString("UTF-8");
+        }
+    }
+
+    private void writeUri(Uri uri, String value) throws Exception {
+        try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
+            if (out == null) throw new IllegalStateException("Cannot write selected file");
+            out.write(value.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        }
+    }
+
     private String readText(File file) throws Exception {
-        try (FileInputStream in = new FileInputStream(file)) {
-            byte[] bytes = new byte[(int) file.length()];
-            int n = in.read(bytes);
-            return new String(bytes, 0, Math.max(n, 0), StandardCharsets.UTF_8);
+        try (FileInputStream in = new FileInputStream(file);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+            return out.toString("UTF-8");
         }
     }
 
     private void writeText(File file, String value) throws Exception {
         File parent = file.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
-            throw new IllegalStateException("Cannot create folder");
+            throw new IllegalStateException("Cannot create workspace folder");
         }
         try (FileOutputStream out = new FileOutputStream(file, false)) {
             out.write(value.getBytes(StandardCharsets.UTF_8));
