@@ -60,6 +60,8 @@ dependencies {
 
 def javaLibrariesOutput = layout.buildDirectory.dir('generated/java-libs')
 android.sourceSets.main.assets.srcDir(javaLibrariesOutput)
+def jdkAssetsOutput = layout.buildDirectory.dir('generated/jdk-assets')
+android.sourceSets.main.assets.srcDir(jdkAssetsOutput)
 
 tasks.register('bundleJavaProjectLibraries', Sync) {
     from configurations.javaProjectLibraries
@@ -173,12 +175,16 @@ tasks.named('preBuild').configure {
     dependsOn tasks.named('bundleJavaProjectLibraries')
 }
 
-// The JDK archive is downloaded into src/main/assets during this same build.
-// Make the Android asset-generation task run after that download and rescan the directory.
+// Copy the downloaded JDK into a dedicated generated asset directory.
+tasks.register('stageOpenJdkAsset', Sync) {
+    dependsOn tasks.named('downloadOpenJdk21')
+    from(jdkArchive)
+    into(jdkAssetsOutput)
+    rename { 'jdk21-android.tar.gz' }
+}
 tasks.configureEach {
     if (name == 'generateDebugAssets') {
-        dependsOn tasks.named('downloadOpenJdk21')
-        outputs.upToDateWhen { false }
+        dependsOn tasks.named('stageOpenJdkAsset')
     }
 }
 
@@ -219,11 +225,17 @@ tasks.register('verifyPackagedJdkAsset') {
     doLast {
         def apk = layout.buildDirectory.file('outputs/apk/debug/app-debug.apk').get().asFile
         if (!apk.isFile()) throw new GradleException("Debug APK was not produced: ${apk}")
-        def entries = zipTree(apk).matching { include 'assets/jdk21-android.tar.gz' }.files
-        if (entries.size() != 1 || entries.first().length() < 100L * 1024L * 1024L) {
-            throw new GradleException("Bundled JDK archive is missing/too small inside APK. Expected assets/jdk21-android.tar.gz (>100 MB).")
+        def zip = new java.util.zip.ZipFile(apk)
+        try {
+            def entry = zip.getEntry('assets/jdk21-android.tar.gz')
+            if (entry == null || entry.size < 100L * 1024L * 1024L) {
+                def candidates = zip.entries().findAll { it.name.toLowerCase().contains('jdk21') }.collect { it.name + ' (' + it.size + ' bytes)' }
+                throw new GradleException("Bundled JDK archive missing/too small in APK. Expected assets/jdk21-android.tar.gz. Found: ${candidates}")
+            }
+            logger.lifecycle("Verified packaged OpenJDK asset inside APK: ${entry.size} bytes")
+        } finally {
+            zip.close()
         }
-        logger.lifecycle("Verified packaged OpenJDK asset inside APK: ${entries.first().length()} bytes")
     }
 }
 
