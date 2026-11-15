@@ -28,7 +28,7 @@ public class MainActivity extends Activity {
     private static final int REQUEST_SAVE_AS = 102;
     private static final String STARTER = "public class Main {\\n" +
             "    public static void main(String[] args) {\\n" +
-            "        System.out.println(\\"Hello from Nice Java IDE!\\");\\n" +
+            "        System.out.println(\"Hello from Nice Java IDE!\");\n" +
             "    }\\n" +
             "}\\n";
 
