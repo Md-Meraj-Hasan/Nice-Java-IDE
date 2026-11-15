@@ -263,7 +263,8 @@ public class MainActivity extends Activity {
                 .putString("web_folder", webFolder.toString())
                 .putString("libraries_folder", librariesFolder.toString())
                 .putString("projects_folder", projectsFolder.toString()).apply();
-        copySafFolderToLocal(tree, projectsFolder, workspace);\n        copySafFolderToLocal(tree, webFolder, workspace);
+        copySafFolderToLocal(tree, projectsFolder, workspace);
+        copySafFolderToLocal(tree, webFolder, workspace);
         status.setText("Folders ready: Downloads/NiceJava/Java, HTML_CSS, Libraries");
         Toast.makeText(this, "NiceJava folders are ready", Toast.LENGTH_LONG).show();
     }
