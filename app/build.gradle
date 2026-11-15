@@ -223,6 +223,32 @@ tasks.register('verifyPackagedJdkAsset') {
                 throw new GradleException("Expected exactly one full-size JDK archive (assets/jdk21-android.tar.gz or assets/jdk21-android.tar). Found: ${candidates}")
             }
             logger.lifecycle("Verified packaged OpenJDK asset inside APK: ${entry.name} (${entry.size} bytes)")
+
+            // Verify that the Kotlin compiler ZIP is also present and contains
+            // the exact files expected by MainActivity.ensureKotlinCompilerInstalled().
+            def kotlinEntry = zip.getEntry('assets/kotlin-compiler-2.4.21.zip')
+            if (kotlinEntry == null || kotlinEntry.size < 10L * 1024L * 1024L) {
+                throw new GradleException("Kotlin compiler archive is missing or too small inside APK: assets/kotlin-compiler-2.4.21.zip")
+            }
+            def foundCompiler = false
+            def foundStdlib = false
+            zip.getInputStream(kotlinEntry).withCloseable { input ->
+                def compilerZip = new java.util.zip.ZipInputStream(input)
+                try {
+                    java.util.zip.ZipEntry item
+                    while ((item = compilerZip.nextEntry) != null) {
+                        if (item.name == 'kotlinc/lib/kotlin-compiler.jar') foundCompiler = true
+                        if (item.name == 'kotlinc/lib/kotlin-stdlib.jar') foundStdlib = true
+                        compilerZip.closeEntry()
+                    }
+                } finally {
+                    compilerZip.close()
+                }
+            }
+            if (!foundCompiler || !foundStdlib) {
+                throw new GradleException("Kotlin compiler ZIP does not contain kotlinc/lib/kotlin-compiler.jar and kotlinc/lib/kotlin-stdlib.jar")
+            }
+            logger.lifecycle("Verified packaged Kotlin compiler asset: ${kotlinEntry.size} bytes; compiler and stdlib entries present")
         } finally {
             zip.close()
         }
