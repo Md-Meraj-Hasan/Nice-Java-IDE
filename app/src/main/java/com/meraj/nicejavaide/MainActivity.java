@@ -3,6 +3,8 @@ package com.meraj.nicejavaide;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.database.Cursor;
+import android.provider.DocumentsContract;
 import android.os.Bundle;
 import android.os.Build;
 import android.os.StatFs;
@@ -39,6 +41,8 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 public class MainActivity extends Activity {
     private static final int REQUEST_OPEN = 101;
     private static final int REQUEST_SAVE_AS = 102;
+    private static final int REQUEST_WORKSPACE_TREE = 103;
+    private static final String STORAGE_PREFS = "nicejava_storage";
     private static final String STARTER = "public class Main {\n" +
             "    public static void main(String[] args) {\n" +
             "        System.out.println(\"Hello from Nice Java IDE!\");\n" +
@@ -91,6 +95,7 @@ public class MainActivity extends Activity {
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         addTool(toolbar, "New", v -> newFile());
         addTool(toolbar, "Files", v -> showWorkspaceFiles());
+        addTool(toolbar, "Setup Folders", v -> setupJavaStorage());
         addTool(toolbar, "Open", v -> openDocument());
         addTool(toolbar, "Save", v -> saveFile());
         addTool(toolbar, "Save As", v -> saveAs());
@@ -209,6 +214,106 @@ public class MainActivity extends Activity {
         button.setAllCaps(false);
         button.setOnClickListener(action);
         bar.addView(button);
+    }
+
+    private void setupJavaStorage() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        intent.putExtra("android.content.extra.SHOW_ADVANCED", true);
+        startActivityForResult(intent, REQUEST_WORKSPACE_TREE);
+    }
+
+    private Uri findOrCreateFolder(Uri tree, Uri parent, String name) throws Exception {
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(parent));
+        String[] columns = {DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE};
+        try (Cursor cursor = getContentResolver().query(children, columns, null, null, null)) {
+            if (cursor != null) while (cursor.moveToNext()) {
+                if (name.equals(cursor.getString(1))
+                        && DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(2))) {
+                    return DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0));
+                }
+            }
+        }
+        Uri created = DocumentsContract.createDocument(getContentResolver(), parent,
+                DocumentsContract.Document.MIME_TYPE_DIR, name);
+        if (created == null) throw new java.io.IOException("Cannot create folder: " + name);
+        return created;
+    }
+
+    private void configureJavaFolders(Uri tree) throws Exception {
+        Uri root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+        Uri appRoot = findOrCreateFolder(tree, root, "NiceJava");
+        Uri javaFolder = findOrCreateFolder(tree, appRoot, "Java");
+        Uri webFolder = findOrCreateFolder(tree, appRoot, "HTML_CSS");
+        Uri librariesFolder = findOrCreateFolder(tree, appRoot, "Libraries");
+        Uri projectsFolder = findOrCreateFolder(tree, javaFolder, "Projects");
+        getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).edit()
+                .putString("tree_uri", tree.toString())
+                .putString("java_folder", javaFolder.toString())
+                .putString("web_folder", webFolder.toString())
+                .putString("libraries_folder", librariesFolder.toString())
+                .putString("projects_folder", projectsFolder.toString()).apply();
+        copySafFolderToLocal(tree, javaFolder, workspace);
+        status.setText("Folders ready: Downloads/NiceJava/Java, HTML_CSS, Libraries");
+        Toast.makeText(this, "NiceJava folders are ready", Toast.LENGTH_LONG).show();
+    }
+
+    private void copySafFolderToLocal(Uri tree, Uri folder, File target) throws Exception {
+        if (!target.exists() && !target.mkdirs()) throw new java.io.IOException("Cannot create local workspace");
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(folder));
+        String[] columns = {DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE};
+        try (Cursor cursor = getContentResolver().query(children, columns, null, null, null)) {
+            if (cursor == null) return;
+            while (cursor.moveToNext()) {
+                String name = cursor.getString(1);
+                if (name.contains("/") || name.equals(".") || name.equals("..")) continue;
+                Uri child = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0));
+                File local = new File(target, name);
+                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(2))) {
+                    copySafFolderToLocal(tree, child, local);
+                } else {
+                    try (InputStream in = getContentResolver().openInputStream(child);
+                         OutputStream out = new FileOutputStream(local)) {
+                        if (in == null) continue;
+                        byte[] buffer = new byte[8192]; int n;
+                        while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
+                    }
+                }
+            }
+        }
+    }
+
+    private void copyLocalFolderToSaf(File source, Uri tree, Uri folder) throws Exception {
+        File[] children = source.listFiles();
+        if (children == null) return;
+        for (File file : children) {
+            if (file.getName().startsWith(".")) continue;
+            if (file.isDirectory()) {
+                Uri sub = findOrCreateFolder(tree, folder, file.getName());
+                copyLocalFolderToSaf(file, tree, sub);
+            } else {
+                Uri target = null;
+                Uri childList = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(folder));
+                String[] columns = {DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME};
+                try (Cursor cursor = getContentResolver().query(childList, columns, null, null, null)) {
+                    if (cursor != null) while (cursor.moveToNext()) if (file.getName().equals(cursor.getString(1))) {
+                        target = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0)); break;
+                    }
+                }
+                if (target == null) target = DocumentsContract.createDocument(getContentResolver(), folder,
+                        "application/octet-stream", file.getName());
+                if (target == null) throw new java.io.IOException("Cannot save " + file.getName());
+                try (InputStream in = new FileInputStream(file);
+                     OutputStream out = getContentResolver().openOutputStream(target, "wt")) {
+                    if (out == null) throw new java.io.IOException("Cannot write " + file.getName());
+                    byte[] buffer = new byte[8192]; int n;
+                    while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
+                }
+            }
+        }
     }
 
     private void newFile() {
@@ -345,6 +450,16 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
+        if (requestCode == REQUEST_WORKSPACE_TREE) {
+            try {
+                int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                getContentResolver().takePersistableUriPermission(uri, flags);
+                configureJavaFolders(uri);
+            } catch (Exception e) {
+                status.setText("Folder setup error: " + e.getMessage());
+            }
+            return;
+        }
         try {
             getContentResolver().takePersistableUriPermission(uri,
                     data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION));
@@ -404,6 +519,12 @@ public class MainActivity extends Activity {
                 status.setText("Saved external file");
             } else {
                 writeText(currentFile, editor.getText().toString());
+                String treeText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null);
+                String folderText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString(
+                        "java_folder", null);
+                if (treeText != null && folderText != null) {
+                    copyLocalFolderToSaf(workspace, Uri.parse(treeText), Uri.parse(folderText));
+                }
                 status.setText("Saved: " + currentFile.getName());
             }
             Toast.makeText(this, "File saved", Toast.LENGTH_SHORT).show();
