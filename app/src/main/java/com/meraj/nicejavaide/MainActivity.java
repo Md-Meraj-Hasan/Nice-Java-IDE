@@ -21,6 +21,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayDeque;
 import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
@@ -38,6 +39,11 @@ public class MainActivity extends Activity {
     private File workspace;
     private File currentFile;
     private Uri currentUri;
+    private final ArrayDeque<String> undoStack = new ArrayDeque<>();
+    private final ArrayDeque<String> redoStack = new ArrayDeque<>();
+    private String lastEditorText = "";
+    private boolean restoringEditor = false;
+    private static final int HISTORY_LIMIT = 100;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -74,6 +80,8 @@ public class MainActivity extends Activity {
         addTool(toolbar, "Save", v -> saveFile());
         addTool(toolbar, "Save As", v -> saveAs());
         addTool(toolbar, "Find", v -> showFind());
+        addTool(toolbar, "Undo", v -> undo());
+        addTool(toolbar, "Redo", v -> redo());
         addTool(toolbar, "Run", v -> showEngineStatus());
         toolbarScroll.addView(toolbar);
         root.addView(toolbarScroll);
@@ -100,6 +108,13 @@ public class MainActivity extends Activity {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable editable) {
+                String current = editable.toString();
+                if (!restoringEditor && !current.equals(lastEditorText)) {
+                    undoStack.push(lastEditorText);
+                    while (undoStack.size() > HISTORY_LIMIT) undoStack.removeLast();
+                    redoStack.clear();
+                    lastEditorText = current;
+                }
                 JavaSyntaxHighlighter.apply(editable);
             }
         });
@@ -118,6 +133,47 @@ public class MainActivity extends Activity {
         status.setText("Offline workspace ready • JDK integration in progress");
     }
 
+    private void setEditorText(String value) {
+        restoringEditor = true;
+        editor.setText(value);
+        lastEditorText = value;
+        undoStack.clear();
+        redoStack.clear();
+        restoringEditor = false;
+    }
+
+    private void undo() {
+        if (undoStack.isEmpty()) {
+            status.setText("Nothing to undo");
+            return;
+        }
+        String current = editor.getText().toString();
+        redoStack.push(current);
+        String previous = undoStack.pop();
+        restoringEditor = true;
+        editor.setText(previous);
+        editor.setSelection(editor.length());
+        lastEditorText = previous;
+        restoringEditor = false;
+        status.setText("Undo");
+    }
+
+    private void redo() {
+        if (redoStack.isEmpty()) {
+            status.setText("Nothing to redo");
+            return;
+        }
+        String current = editor.getText().toString();
+        undoStack.push(current);
+        String next = redoStack.pop();
+        restoringEditor = true;
+        editor.setText(next);
+        editor.setSelection(editor.length());
+        lastEditorText = next;
+        restoringEditor = false;
+        status.setText("Redo");
+    }
+
     private void addTool(LinearLayout bar, String title, View.OnClickListener action) {
         Button button = new Button(this);
         button.setText(title);
@@ -130,7 +186,7 @@ public class MainActivity extends Activity {
     private void newFile() {
         currentFile = new File(workspace, "Untitled.java");
         currentUri = null;
-        editor.setText("public class Untitled {\n    public static void main(String[] args) {\n    }\n}\n");
+        setEditorText("public class Untitled {\n    public static void main(String[] args) {\n    }\n}\n");
         updateFileLabel();
         status.setText("New file • use Save or Save As");
     }
