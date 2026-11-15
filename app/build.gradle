@@ -212,12 +212,17 @@ tasks.register('verifyPackagedJdkAsset') {
         if (!apk.isFile()) throw new GradleException("Debug APK was not produced: ${apk}")
         def zip = new java.util.zip.ZipFile(apk)
         try {
-            def entry = zip.getEntry('assets/jdk21-android.tar.gz')
-            if (entry == null || entry.size < 100L * 1024L * 1024L) {
-                def candidates = zip.entries().findAll { it.name.toLowerCase().contains('jdk21') }.collect { it.name + ' (' + it.size + ' bytes)' }
-                throw new GradleException("Bundled JDK archive missing/too small in APK. Expected assets/jdk21-android.tar.gz. Found: ${candidates}")
+            // Android's asset packaging may normalize .tar.gz to .tar (noCompress).
+            // Accept either exact name, but require exactly one full-size archive.
+            def entries = zip.entries().toList().findAll {
+                it.name == 'assets/jdk21-android.tar.gz' || it.name == 'assets/jdk21-android.tar'
             }
-            logger.lifecycle("Verified packaged OpenJDK asset inside APK: ${entry.size} bytes")
+            def entry = entries.find { it.size >= 100L * 1024L * 1024L }
+            if (entry == null || entries.size() != 1) {
+                def candidates = zip.entries().toList().findAll { it.name.toLowerCase().contains('jdk21') }.collect { it.name + ' (' + it.size + ' bytes)' }
+                throw new GradleException("Expected exactly one full-size JDK archive (assets/jdk21-android.tar.gz or assets/jdk21-android.tar). Found: ${candidates}")
+            }
+            logger.lifecycle("Verified packaged OpenJDK asset inside APK: ${entry.name} (${entry.size} bytes)")
         } finally {
             zip.close()
         }
