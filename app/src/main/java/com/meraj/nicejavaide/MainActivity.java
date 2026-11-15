@@ -108,7 +108,18 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         ideWebView.setBackgroundColor(0xFF090E18);
         ideWebView.setWebChromeClient(new android.webkit.WebChromeClient());
-        ideWebView.setWebViewClient(new android.webkit.WebViewClient());
+        ideWebView.setWebViewClient(new android.webkit.WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                String code = editor == null ? STARTER : editor.getText().toString();
+                view.evaluateJavascript("window.setEditorCode && window.setEditorCode(" +
+                        org.json.JSONObject.quote(code) + ")", null);
+                String name = currentFile == null ? "Main.java" : currentFile.getName();
+                view.evaluateJavascript("window.setFileName && window.setFileName(" +
+                        org.json.JSONObject.quote(name) + ")", null);
+            }
+        });
         ideWebView.addJavascriptInterface(new NiceIdeBridge(), "NativeIDE");
 
         LinearLayout root = new LinearLayout(this);
