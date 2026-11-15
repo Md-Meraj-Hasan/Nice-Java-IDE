@@ -222,7 +222,7 @@ public class MainActivity extends Activity {
 
     private void showWorkspaceFiles() {
         java.util.ArrayList<File> files = new java.util.ArrayList<>();
-        collectJavaFiles(workspace, files);
+        collectWorkspaceFiles(workspace, files);
         java.util.Collections.sort(files, (a, b) -> a.getAbsolutePath().compareToIgnoreCase(b.getAbsolutePath()));
         String[] names = new String[files.size() + 1];
         names[0] = "+  Create new Java file";
@@ -247,6 +247,29 @@ public class MainActivity extends Activity {
             if (child.isDirectory()) collectJavaFiles(child, output);
             else if (child.getName().endsWith(".java")) output.add(child);
         }
+    }
+
+    private void collectWorkspaceFiles(File folder, java.util.List<File> output) {
+        File[] children = folder.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child.isDirectory()) collectWorkspaceFiles(child, output);
+            else if (isSupportedCodeFile(child)) output.add(child);
+        }
+    }
+
+    private boolean isSupportedCodeFile(File file) {
+        String name = file.getName().toLowerCase(java.util.Locale.ROOT);
+        return name.endsWith(".java") || name.endsWith(".html") || name.endsWith(".htm")
+                || name.endsWith(".css") || name.endsWith(".js") || name.endsWith(".json")
+                || name.endsWith(".xml") || name.endsWith(".md") || name.endsWith(".txt")
+                || name.endsWith(".py");
+    }
+
+    private String getCurrentExtension() {
+        String name = currentFile == null ? "" : currentFile.getName().toLowerCase(java.util.Locale.ROOT);
+        int dot = name.lastIndexOf('.');
+        return dot < 0 ? "" : name.substring(dot + 1);
     }
 
     private void openWorkspaceFile(File file) {
