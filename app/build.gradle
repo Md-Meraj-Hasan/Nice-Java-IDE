@@ -24,12 +24,37 @@ android {
     }
 }
 
+configurations {
+    javaProjectLibraries
+}
+
 dependencies {
+    // Libraries bundled for offline Java projects (not Android app runtime dependencies).
+    javaProjectLibraries 'com.google.code.gson:gson:2.13.1'
+    javaProjectLibraries 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    javaProjectLibraries 'com.squareup.okhttp3:okhttp:4.12.0'
+    javaProjectLibraries 'org.apache.commons:commons-lang3:3.18.0'
+    javaProjectLibraries 'commons-io:commons-io:2.20.0'
+    javaProjectLibraries 'org.apache.commons:commons-csv:1.14.1'
+    javaProjectLibraries 'commons-codec:commons-codec:1.19.0'
+    javaProjectLibraries 'org.bouncycastle:bcprov-jdk18on:1.81'
+    javaProjectLibraries 'junit:junit:4.13.2'
+    javaProjectLibraries 'com.h2database:h2:2.3.232'
+    javaProjectLibraries 'org.slf4j:slf4j-api:2.0.17'
     implementation 'org.apache.commons:commons-compress:1.27.1'
     implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'com.google.android.material:material:1.13.0'
     implementation 'androidx.activity:activity:1.10.1'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
+}
+
+def javaLibrariesOutput = layout.buildDirectory.dir('generated/java-libs')
+android.sourceSets.main.assets.srcDir(javaLibrariesOutput)
+
+tasks.register('bundleJavaProjectLibraries', Sync) {
+    from configurations.javaProjectLibraries
+    into javaLibrariesOutput.map { it.dir('java-libs') }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 def jdkArchive = layout.projectDirectory.file('src/main/assets/jdk21-android.tar.gz')
@@ -84,4 +109,5 @@ tasks.register('downloadOpenJdk21') {
 
 tasks.named('preBuild').configure {
     dependsOn tasks.named('downloadOpenJdk21')
+    dependsOn tasks.named('bundleJavaProjectLibraries')
 }
