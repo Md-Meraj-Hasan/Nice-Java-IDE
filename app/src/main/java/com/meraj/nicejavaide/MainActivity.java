@@ -176,6 +176,11 @@ public class MainActivity extends Activity {
         }
 
         @android.webkit.JavascriptInterface
+        public void saveAs() {
+            runOnUiThread(() -> saveAs());
+        }
+
+        @android.webkit.JavascriptInterface
         public void newFile() {
             runOnUiThread(() -> newFile());
         }
