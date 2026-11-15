@@ -848,8 +848,7 @@ public class MainActivity extends Activity {
         File java = new File(jdkHome, "bin/java");
         File javac = new File(jdkHome, "bin/javac");
         File runtime = new File(jdkHome, "lib/modules");
-        return java.isFile() && javac.isFile() && runtime.isFile()
-                && java.canExecute() && javac.canExecute();
+        return java.isFile() && javac.isFile() && runtime.isFile();
     }
 
     private File getJavaLibrariesDirectory() {
@@ -1054,7 +1053,31 @@ public class MainActivity extends Activity {
                     throw new IllegalStateException("Cannot finalize JDK installation");
                 }
                 jdkHome = destination;
-                if (!isJdkInstalled()) throw new IllegalStateException("JDK compiler files are missing");
+                // Preserve executable permissions even if the extraction filesystem
+                // did not retain the TAR mode bits.
+                File binDirectory = new File(jdkHome, "bin");
+                File[] executables = binDirectory.listFiles();
+                if (executables != null) {
+                    for (File executable : executables) {
+                        if (executable.isFile()) executable.setExecutable(true, false);
+                    }
+                }
+                File javaBinary = new File(jdkHome, "bin/java");
+                File javacBinary = new File(jdkHome, "bin/javac");
+                File modulesFile = new File(jdkHome, "lib/modules");
+                if (javaBinary.isFile()) javaBinary.setExecutable(true, false);
+                if (javacBinary.isFile()) javacBinary.setExecutable(true, false);
+                if (!javaBinary.isFile() || !javacBinary.isFile() || !modulesFile.isFile()) {
+                    throw new IllegalStateException("Extracted JDK is incomplete. java=" +
+                            javaBinary.isFile() + " (" + javaBinary.getAbsolutePath() + ")" +
+                            ", javac=" + javacBinary.isFile() + " (" + javacBinary.getAbsolutePath() + ")" +
+                            ", lib/modules=" + modulesFile.isFile() +
+                            ". Extracted folder: " + jdkHome.getAbsolutePath());
+                }
+                if (!javaBinary.canExecute() || !javacBinary.canExecute()) {
+                    throw new IllegalStateException("JDK files exist but Android could not mark them executable. java executable=" +
+                            javaBinary.canExecute() + ", javac executable=" + javacBinary.canExecute());
+                }
                 success = true;
             } catch (Exception e) {
                 error = e.getClass().getSimpleName() + ": " + e.getMessage();
