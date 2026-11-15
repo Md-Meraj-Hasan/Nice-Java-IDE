@@ -87,6 +87,13 @@ public class MainActivity extends Activity {
         editor.setHorizontallyScrolling(true);
         editor.setMinLines(18);
         editor.setTextIsSelectable(true);
+        editor.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable editable) {
+                JavaSyntaxHighlighter.apply(editable);
+            }
+        });
         LinearLayout.LayoutParams editorParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
         editorParams.topMargin = dp(8);
