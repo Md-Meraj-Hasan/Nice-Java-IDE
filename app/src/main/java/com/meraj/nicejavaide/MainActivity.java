@@ -359,8 +359,8 @@ public class MainActivity extends Activity {
                 "Kotlin Compiler",
                 "HTML / CSS / JS Preview"
         };
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Tools")
+        android.app.AlertDialog toolsDialog = new android.app.AlertDialog.Builder(this)
+                .setTitle("🧰  Nice Java Tools")
                 .setItems(items, (dialog, which) -> {
                     switch (which) {
                         case 0: installBundledJdk(); break;
@@ -376,7 +376,28 @@ public class MainActivity extends Activity {
                     }
                 })
                 .setNegativeButton("Close", null)
-                .show();
+                .create();
+        toolsDialog.setOnShowListener(dialog -> {
+            android.graphics.drawable.GradientDrawable popupBg = new android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                    new int[]{0xFF172D50, 0xFF263D68, 0xFF173D49});
+            popupBg.setCornerRadius(dp(18));
+            popupBg.setStroke(dp(1), 0xFF4D8FEA);
+            toolsDialog.getWindow().setBackgroundDrawable(popupBg);
+            int blue = 0xFF79AEFF;
+            toolsDialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(blue);
+            int titleId = getResources().getIdentifier("alertTitle", "id", "android");
+            TextView title = toolsDialog.findViewById(titleId);
+            if (title != null) title.setTextColor(0xFFFFFFFF);
+            android.widget.ListView list = toolsDialog.getListView();
+            if (list != null) {
+                list.setBackgroundColor(0xFF1B3154);
+                list.setDivider(new android.graphics.drawable.ColorDrawable(0xFF46658F));
+                list.setDividerHeight(dp(1));
+                list.setSelector(android.R.drawable.list_selector_background);
+            }
+        });
+        toolsDialog.show();
     }
 
     private void runJdkTool(String toolName) {
