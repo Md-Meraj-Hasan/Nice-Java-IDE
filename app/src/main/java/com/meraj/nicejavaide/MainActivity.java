@@ -361,20 +361,6 @@ public class MainActivity extends Activity {
         };
         android.app.AlertDialog toolsDialog = new android.app.AlertDialog.Builder(this)
                 .setTitle("🧰  Nice Java Tools")
-                .setItems(items, (dialog, which) -> {
-                    switch (which) {
-                        case 0: installBundledJdk(); break;
-                        case 1: installJavaProjectLibraries(); break;
-                        case 2: runJdkTool("java"); break;
-                        case 3: runJdkTool("javac"); break;
-                        case 4: runJdkTool("jar"); break;
-                        case 5: runJdkTool("javadoc"); break;
-                        case 6: runJdkTool("jshell"); break;
-                        case 7: runJdkTool("keytool"); break;
-                        case 8: runJdkTool("kotlinc"); break;
-                        case 9: previewCurrentHtml(); break;
-                    }
-                })
                 .setNegativeButton("Close", null)
                 .create();
         toolsDialog.setOnShowListener(dialog -> {
@@ -384,18 +370,45 @@ public class MainActivity extends Activity {
             popupBg.setCornerRadius(dp(18));
             popupBg.setStroke(dp(1), 0xFF4D8FEA);
             toolsDialog.getWindow().setBackgroundDrawable(popupBg);
-            int blue = 0xFF79AEFF;
-            toolsDialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(blue);
+            toolsDialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFF79AEFF);
             int titleId = getResources().getIdentifier("alertTitle", "id", "android");
             TextView title = toolsDialog.findViewById(titleId);
             if (title != null) title.setTextColor(0xFFFFFFFF);
+
             android.widget.ListView list = toolsDialog.getListView();
-            if (list != null) {
-                list.setBackgroundColor(0xFF1B3154);
-                list.setDivider(new android.graphics.drawable.ColorDrawable(0xFF46658F));
-                list.setDividerHeight(dp(1));
-                list.setSelector(android.R.drawable.list_selector_background);
-            }
+            list.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            list.setDivider(new android.graphics.drawable.ColorDrawable(0xFF46658F));
+            list.setDividerHeight(dp(1));
+            android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<String>(
+                    MainActivity.this, android.R.layout.simple_list_item_1, items) {
+                @Override
+                public android.view.View getView(int position, android.view.View convertView,
+                                                 android.view.ViewGroup parent) {
+                    TextView item = (TextView) super.getView(position, convertView, parent);
+                    item.setTextColor(0xFFFFFFFF);
+                    item.setTextSize(16);
+                    item.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                    item.setPadding(dp(22), dp(13), dp(18), dp(13));
+                    item.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    return item;
+                }
+            };
+            list.setAdapter(adapter);
+            list.setOnItemClickListener((parent, view, which, id) -> {
+                toolsDialog.dismiss();
+                switch (which) {
+                    case 0: installBundledJdk(); break;
+                    case 1: installJavaProjectLibraries(); break;
+                    case 2: runJdkTool("java"); break;
+                    case 3: runJdkTool("javac"); break;
+                    case 4: runJdkTool("jar"); break;
+                    case 5: runJdkTool("javadoc"); break;
+                    case 6: runJdkTool("jshell"); break;
+                    case 7: runJdkTool("keytool"); break;
+                    case 8: runJdkTool("kotlinc"); break;
+                    case 9: previewCurrentHtml(); break;
+                }
+            });
         });
         toolsDialog.show();
     }
