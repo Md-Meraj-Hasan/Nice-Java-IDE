@@ -1469,9 +1469,7 @@ public class MainActivity extends Activity {
                             "-Dfile.encoding=UTF-8", "-cp",
                             outputJar.getAbsolutePath() + File.pathSeparator + projectLibraryClasspath, mainClass);
                     success = true;
-                    report = "KOTLIN BUILD SUCCESSFUL\n" + sources.size() +
-                            " Kotlin source file(s) compiled.\n\nRUN: " + mainClass + "\n\n" +
-                            (output.isEmpty() ? "(Program finished with no output)" : output);
+                    report = cleanProgramOutput(output);
                 }
             } catch (Exception e) {
                 report = "KOTLIN BUILD / RUN FAILED\n\n" + e.getMessage();
@@ -1555,8 +1553,7 @@ public class MainActivity extends Activity {
                 String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-Dfile.encoding=UTF-8",
                         "-cp", classes.getAbsolutePath() + File.pathSeparator + libraryClasspath, mainClass);
                 success = true;
-                report = "BUILD SUCCESSFUL\n" + sources.size() + " Java source file(s) compiled.\n\n" +
-                        "RUN: " + mainClass + "\n\n" + (runOutput.isEmpty() ? "(Program finished with no output)" : runOutput);
+                report = cleanProgramOutput(runOutput);
             } catch (Exception e) {
                 report = "BUILD / RUN FAILED\n\n" + e.getMessage();
             }
@@ -1569,22 +1566,66 @@ public class MainActivity extends Activity {
         }, "NiceJava-CompileRun").start();
     }
 
+    private String cleanProgramOutput(String output) {
+        if (output == null || output.trim().isEmpty()) return "Program finished with no output.";
+        // Android's linker emits JDK DT_RPATH warnings before the actual stdout.
+        // Keep program output clean; execution/compile failures are shown separately.
+        String cleaned = output.replaceAll("(?m)^WARNING: linker: Warning:.*(?:\\\?\\\
+|$)", "");
+        return cleaned.trim().isEmpty() ? "Program finished with no output." : cleaned.trim();
+    }
+
     private void showConsoleResult(boolean success, String output) {
+        android.app.Dialog dialog = new android.app.Dialog(this,
+                android.R.style.Theme_Material_NoActionBar_Fullscreen);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(0xFF090E18);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(18), dp(12), dp(12), dp(12));
+        header.setBackgroundColor(0xFF151E2D);
+        TextView heading = new TextView(this);
+        heading.setText(success ? "OUTPUT" : "ERROR");
+        heading.setTextColor(success ? 0xFF65D6A3 : 0xFFFF8585);
+        heading.setTextSize(18);
+        heading.setTypeface(null, android.graphics.Typeface.BOLD);
+        header.addView(heading, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        Button close = new Button(this);
+        close.setText("CLOSE");
+        close.setAllCaps(false);
+        close.setOnClickListener(v -> dialog.dismiss());
+        header.addView(close);
+        page.addView(header, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(64)));
+
         TextView console = new TextView(this);
         console.setText(output);
         console.setTextIsSelectable(true);
         console.setTextColor(0xFFE5E7EB);
-        console.setTextSize(13);
+        console.setTextSize(15);
         console.setTypeface(android.graphics.Typeface.MONOSPACE);
-        console.setPadding(dp(14), dp(12), dp(14), dp(12));
-        console.setBackgroundColor(0xFF0B1220);
+        console.setPadding(dp(18), dp(18), dp(18), dp(18));
+        console.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
-        scroll.addView(console);
-        new android.app.AlertDialog.Builder(this)
-                .setTitle(success ? "Run Console • Success" : "Run Console • Error")
-                .setView(scroll)
-                .setPositiveButton("Close", null)
-                .show();
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(0xFF0B1220);
+        scroll.addView(console, new android.widget.ScrollView.LayoutParams(
+                android.widget.ScrollView.LayoutParams.MATCH_PARENT,
+                android.widget.ScrollView.LayoutParams.WRAP_CONTENT));
+        page.addView(scroll, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        dialog.setContentView(page);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT);
+            dialog.getWindow().setStatusBarColor(0xFF090E18);
+            dialog.getWindow().setNavigationBarColor(0xFF090E18);
+        }
     }
 
     private void showEngineStatus() {
