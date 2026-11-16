@@ -210,6 +210,11 @@ public class MainActivity extends Activity {
         }
 
         @android.webkit.JavascriptInterface
+        public void tools() {
+            runOnUiThread(() -> showIdeMenu(ideWebView, 5));
+        }
+
+        @android.webkit.JavascriptInterface
         public void newKotlin() {
             runOnUiThread(() -> promptNewKotlinFile());
         }
