@@ -1627,17 +1627,22 @@ public class MainActivity extends Activity {
             throw new IllegalStateException("JDK executable is missing or not executable: " + executable.getAbsolutePath());
         }
         List<String> command = new ArrayList<>();
-        // The JDK's bin/javac is a shell launcher script. Android app-private
-        // filesystems may be mounted noexec, and linker64 cannot launch scripts.
-        // Invoke javac through the real ELF java launcher instead.
-        if ("javac".equals(executable.getName()) || "javac.exe".equals(executable.getName())) {
-            File javaLauncher = new File(jdkHome, "bin/java");
-            if (!javaLauncher.isFile()) {
-                throw new IllegalStateException("OpenJDK java launcher is missing: " + javaLauncher);
+        // Android app-private files may be mounted noexec. The build packages
+        // the actual ARM64 JDK launcher ELFs as native libraries so PackageManager
+        // extracts them into nativeLibraryDir, an executable installation path.
+        String toolName = executable.getName();
+        File nativeDir = new File(getApplicationInfo().nativeLibraryDir);
+        File packagedLauncher = null;
+        if ("javac".equals(toolName) || "javac.exe".equals(toolName)) {
+            packagedLauncher = new File(nativeDir, "libnicejavac.so");
+        } else if ("java".equals(toolName) || "java.exe".equals(toolName)) {
+            packagedLauncher = new File(nativeDir, "libnicejava.so");
+        }
+        if (packagedLauncher != null) {
+            if (!packagedLauncher.isFile() || !packagedLauncher.canExecute()) {
+                throw new IllegalStateException("Android JDK launcher is missing or not executable: " + packagedLauncher);
             }
-            command.add(javaLauncher.getAbsolutePath());
-            command.add("-m");
-            command.add("jdk.compiler/com.sun.tools.javac.Main");
+            command.add(packagedLauncher.getAbsolutePath());
         } else {
             command.add(executable.getAbsolutePath());
         }
