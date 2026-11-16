@@ -1655,9 +1655,9 @@ public class MainActivity extends Activity {
                 if (!linker.isFile()) throw directError;
                 List<String> linkerCommand = new ArrayList<>();
                 linkerCommand.add(linker.getAbsolutePath());
-                linkerCommand.add("--library-path");
-                linkerCommand.add(server + ":" + lib +
-                        (existingLdPath == null || existingLdPath.isEmpty() ? "" : ":" + existingLdPath));
+                // Android's linker64 on some releases does not accept --library-path
+                // here; it interprets it as the ELF path. Pass the library search
+                // path only through LD_LIBRARY_PATH in the child environment.
                 linkerCommand.addAll(command);
                 ProcessBuilder fallback = new ProcessBuilder(linkerCommand);
                 fallback.directory(getFilesDir());
