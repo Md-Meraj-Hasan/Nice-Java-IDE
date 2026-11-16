@@ -1559,9 +1559,10 @@ public class MainActivity extends Activity {
                 ensureJavaLibrariesInstalled();
                 File libraryDirectory = getJavaLibrariesDirectory();
                 String libraryClasspath = new File(libraryDirectory, "*").getAbsolutePath();
-                List<File> sources = new ArrayList<>();
-                collectJavaFiles(workspace, sources);
-                if (sources.isEmpty()) throw new IllegalStateException("No .java source files found in Workspace.");
+                if (currentFile == null || !currentFile.isFile() ||
+                        !currentFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".java")) {
+                    throw new IllegalStateException("Open a Java source file inside Workspace before running.");
+                }
 
                 String sourceText = readText(currentFile);
                 java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
@@ -1585,24 +1586,25 @@ public class MainActivity extends Activity {
                     if (!staging.mkdirs()) throw new IllegalStateException("Cannot create temporary Java source folder.");
                     compileSource = new File(staging, expectedSourceName);
                     writeText(compileSource, sourceText);
-                    for (int sourceIndex = 0; sourceIndex < sources.size(); sourceIndex++) {
-                        if (sources.get(sourceIndex).getCanonicalFile().equals(currentFile.getCanonicalFile())) {
-                            sources.set(sourceIndex, compileSource);
-                            break;
-                        }
-                    }
                 }
 
-                deleteTree(classes);
-                if (!classes.mkdirs()) throw new IllegalStateException("Cannot create build output folder.");
+                // Keep previous class files and compile only the active source.
+                // javac resolves project dependencies through -sourcepath and
+                // recompiles source dependencies when their class files are stale.
+                if (!classes.exists() && !classes.mkdirs()) {
+                    throw new IllegalStateException("Cannot create build output folder.");
+                }
+                String compileClasspath = classes.getAbsolutePath() + File.pathSeparator + libraryClasspath;
                 List<String> compileArgs = new ArrayList<>();
                 compileArgs.add("-encoding");
                 compileArgs.add("UTF-8");
                 compileArgs.add("-classpath");
-                compileArgs.add(libraryClasspath);
+                compileArgs.add(compileClasspath);
+                compileArgs.add("-sourcepath");
+                compileArgs.add(workspace.getAbsolutePath());
                 compileArgs.add("-d");
                 compileArgs.add(classes.getAbsolutePath());
-                for (File source : sources) compileArgs.add(source.getAbsolutePath());
+                compileArgs.add(compileSource.getAbsolutePath());
                 String compileOutput = runJdkCommand(new File(jdkHome, "bin/javac"), compileArgs.toArray(new String[0]));
                 String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
                 String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-Dfile.encoding=UTF-8",
