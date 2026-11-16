@@ -1612,13 +1612,30 @@ public class MainActivity extends Activity {
         console.setTypeface(android.graphics.Typeface.MONOSPACE);
         console.setPadding(dp(18), dp(18), dp(18), dp(18));
         console.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
-        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackgroundColor(0xFF0B1220);
-        scroll.addView(console, new android.widget.ScrollView.LayoutParams(
+        // Preserve long output lines and allow independent horizontal scrolling.
+        console.setHorizontallyScrolling(true);
+        console.setSingleLine(false);
+
+        android.widget.HorizontalScrollView horizontalScroll =
+                new android.widget.HorizontalScrollView(this);
+        horizontalScroll.setFillViewport(false);
+        horizontalScroll.setHorizontalScrollBarEnabled(true);
+        horizontalScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        horizontalScroll.addView(console, new android.widget.HorizontalScrollView.LayoutParams(
+                android.widget.HorizontalScrollView.LayoutParams.WRAP_CONTENT,
+                android.widget.HorizontalScrollView.LayoutParams.WRAP_CONTENT));
+
+        // Outer ScrollView handles vertical movement; inner HorizontalScrollView
+        // handles long lines without wrapping or clipping.
+        android.widget.ScrollView verticalScroll = new android.widget.ScrollView(this);
+        verticalScroll.setFillViewport(true);
+        verticalScroll.setVerticalScrollBarEnabled(true);
+        verticalScroll.setBackgroundColor(0xFF0B1220);
+        verticalScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        verticalScroll.addView(horizontalScroll, new android.widget.ScrollView.LayoutParams(
                 android.widget.ScrollView.LayoutParams.MATCH_PARENT,
                 android.widget.ScrollView.LayoutParams.WRAP_CONTENT));
-        page.addView(scroll, new LinearLayout.LayoutParams(
+        page.addView(verticalScroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         dialog.setContentView(page);
