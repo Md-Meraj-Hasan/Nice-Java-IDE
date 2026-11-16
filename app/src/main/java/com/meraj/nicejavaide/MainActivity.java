@@ -1568,11 +1568,15 @@ public class MainActivity extends Activity {
 
     private String cleanProgramOutput(String output) {
         if (output == null || output.trim().isEmpty()) return "Program finished with no output.";
-        // Android's linker emits JDK DT_RPATH warnings before the actual stdout.
-        // Keep program output clean; execution/compile failures are shown separately.
-        String cleaned = output.replaceAll("(?m)^WARNING: linker: Warning:.*(?:\\\?\\\
-|$)", "");
-        return cleaned.trim().isEmpty() ? "Program finished with no output." : cleaned.trim();
+        StringBuilder cleaned = new StringBuilder();
+        for (String line : output.split("\\\\r?\\\\n")) {
+            // Hide Android linker DT_RPATH warnings; these are not program output.
+            if (line.startsWith("WARNING: linker: Warning:")) continue;
+            if (cleaned.length() > 0) cleaned.append('\\n');
+            cleaned.append(line);
+        }
+        return cleaned.toString().trim().isEmpty()
+                ? "Program finished with no output." : cleaned.toString().trim();
     }
 
     private void showConsoleResult(boolean success, String output) {
