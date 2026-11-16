@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        ideWebView.setBackgroundColor(0xFF090E18);
+        ideWebView.setBackgroundColor(0xFFF2F5FA);
         ideWebView.setWebChromeClient(new android.webkit.WebChromeClient());
         ideWebView.setWebViewClient(new android.webkit.WebViewClient() {
             @Override
@@ -124,7 +124,7 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFF090E18);
+        root.setBackgroundColor(0xFFF2F5FA);
         root.addView(ideWebView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         root.addView(editor, new LinearLayout.LayoutParams(1, 1));
