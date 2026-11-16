@@ -1641,7 +1641,9 @@ public class MainActivity extends Activity {
             env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
             String lib = new File(jdkHome, "lib").getAbsolutePath();
             String server = new File(jdkHome, "lib/server").getAbsolutePath();
-            env.put("LD_LIBRARY_PATH", server + ":" + lib + ":" + env.get("LD_LIBRARY_PATH"));
+            String existingLdPath = env.get("LD_LIBRARY_PATH");
+            env.put("LD_LIBRARY_PATH", server + ":" + lib +
+                    (existingLdPath == null || existingLdPath.isEmpty() ? "" : ":" + existingLdPath));
             try {
                 process = builder.start();
             } catch (java.io.IOException directError) {
@@ -1653,6 +1655,9 @@ public class MainActivity extends Activity {
                 if (!linker.isFile()) throw directError;
                 List<String> linkerCommand = new ArrayList<>();
                 linkerCommand.add(linker.getAbsolutePath());
+                linkerCommand.add("--library-path");
+                linkerCommand.add(server + ":" + lib +
+                        (existingLdPath == null || existingLdPath.isEmpty() ? "" : ":" + existingLdPath));
                 linkerCommand.addAll(command);
                 ProcessBuilder fallback = new ProcessBuilder(linkerCommand);
                 fallback.directory(getFilesDir());
