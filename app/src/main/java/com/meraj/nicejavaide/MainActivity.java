@@ -1569,7 +1569,7 @@ public class MainActivity extends Activity {
     private String cleanProgramOutput(String output) {
         if (output == null || output.trim().isEmpty()) return "Program finished with no output.";
         StringBuilder cleaned = new StringBuilder();
-        for (String line : output.split("\\\\r?\\\\n")) {
+        for (String line : output.split("\\r?\\n")) {
             // Hide Android linker DT_RPATH warnings; these are not program output.
             if (line.startsWith("WARNING: linker: Warning:")) continue;
             if (cleaned.length() > 0) cleaned.append('\\n');
