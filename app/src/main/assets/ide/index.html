@@ -11,7 +11,7 @@ button{font:inherit;color:var(--txt);border:1px solid var(--line);background:var
 button:active{filter:brightness(1.25)}button.run{background:#126b4b;border-color:#19865f;color:#fff;font-weight:700}
 .ribbon{display:flex;align-items:stretch;gap:0;padding:0 5px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto;flex-shrink:0;scrollbar-width:none}
 .group{position:relative;display:flex;align-items:center;gap:3px;padding:5px 6px;border-right:1px solid #34435a;flex:0 0 auto}
-.group:last-child{border-right:0}.group-title{font-size:10px;letter-spacing:.5px;color:#8fa3bd;text-transform:uppercase;padding:0 5px;white-space:nowrap}
+.group:last-child{border-right:0}.group-title{font-size:10px;letter-spacing:.5px;color:#8fa3bd;text-transform:uppercase;padding:0 5px;white-space:nowrap}.tools-menu-btn{position:relative;z-index:3;min-height:34px!important;padding:5px 12px!important;border:1px solid #3978f6!important;border-radius:7px!important;background:#1b3154!important;color:#ffffff!important;font-size:13px!important;font-weight:700!important;letter-spacing:0!important;text-transform:none!important;pointer-events:auto!important;opacity:1!important}
 .group button{min-height:34px;padding:5px 9px;white-space:nowrap;border-color:transparent;background:transparent;font-size:13px}
 .filebar{height:37px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#101a2a;border-bottom:1px solid var(--line);flex-shrink:0;color:#9fb5d5}
 .file-dot{width:8px;height:8px;border-radius:50%;background:#67a0ff}.file-name{font-weight:650;color:#d9e5f7}
@@ -31,7 +31,7 @@ body.light .header,body.light .ribbon,body.light .status{background:#e9eff8}body
  <section class="group"><span class="group-title">File</span><button data-action="new">＋ New</button><button data-action="open">Open</button><button data-action="save">Save</button><button data-action="saveas">Save As</button></section>
  <section class="group"><span class="group-title">Edit</span><button data-action="undo">↶</button><button data-action="redo">↷</button><button data-action="find">Find</button></section>
  <section class="group"><span class="group-title">Project</span><button data-action="files">Files</button><button data-action="folders">Folders</button><button data-action="kotlin">Kotlin</button></section>
- <section class="group"><button type="button" class="group-title" data-action="tools" aria-label="Open Tools menu">Tools</button><button data-action="jdk">JDK</button><button data-action="libs">Libraries</button></section>
+ <section class="group"><button type="button" id="toolsBtn" class="tools-menu-btn" aria-label="Open Tools menu">Tools ▾</button><button data-action="jdk">JDK</button><button data-action="libs">Libraries</button></section>
 </nav>
 <div class="filebar"><span class="file-dot"></span><span class="file-name" id="fileName">Main.java</span><span style="margin-left:auto;color:#8094b0">JAVA</span></div>
 <div class="editor-wrap" id="editorWrap"><textarea id="source"></textarea></div>
@@ -76,7 +76,8 @@ body.light .header,body.light .ribbon,body.light .status{background:#e9eff8}body
  document.querySelectorAll('[data-pair]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();insert(b.getAttribute('data-pair'),true)}));
  document.querySelectorAll('[data-move]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();const d=b.dataset.move;editor.focus();editor.execCommand(({up:'goLineUp',down:'goLineDown',left:'goCharLeft',right:'goCharRight'})[d])}));
  document.querySelector('[data-key="tab"]').addEventListener('pointerdown',e=>{e.preventDefault();insert('    ')});
- document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;const map={new:'newFile',open:'open',save:'save',saveas:'saveAs',files:'files',folders:'setupFolders',kotlin:'newKotlin',tools:'tools',jdk:'installJdk',libs:'installLibraries'};if(a==='undo'){editor.undo();return}if(a==='redo'){editor.redo();return}if(a==='find'){let q=prompt('Find text');if(q){let at=editor.getValue().indexOf(q);if(at>=0){editor.setSelection(editor.posFromIndex(at),editor.posFromIndex(at+q.length));editor.focus()}else report('Text not found')}return}if(a==='save'||a==='saveas'||a==='new'||a==='open')sync();nativeCall(map[a])}));
+ document.getElementById('toolsBtn').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();report('Opening Tools menu…');nativeCall('tools')});
+ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;const map={new:'newFile',open:'open',save:'save',saveas:'saveAs',files:'files',folders:'setupFolders',kotlin:'newKotlin',jdk:'installJdk',libs:'installLibraries'};if(a==='undo'){editor.undo();return}if(a==='redo'){editor.redo();return}if(a==='find'){let q=prompt('Find text');if(q){let at=editor.getValue().indexOf(q);if(at>=0){editor.setSelection(editor.posFromIndex(at),editor.posFromIndex(at+q.length));editor.focus()}else report('Text not found')}return}if(a==='save'||a==='saveas'||a==='new'||a==='open')sync();nativeCall(map[a])}));
  document.getElementById('runBtn').addEventListener('click',()=>{sync();report('Compiling and running…');nativeCall('run')});
  document.getElementById('themeBtn').addEventListener('click',()=>{document.body.classList.toggle('light');editor.setOption('theme',document.body.classList.contains('light')?'default':'material-darker')});
  document.addEventListener('focusin',e=>{if(e.target.closest('.CodeMirror'))document.body.classList.add('editor-focused')});
