@@ -5,6 +5,14 @@ plugins {
 android {
     // Keep the downloaded JDK/Kotlin archives under the standard APK assets/ namespace.
     sourceSets.main.assets.srcDir(layout.projectDirectory.dir('src/main/assets'))
+    sourceSets.main.jniLibs.srcDir(layout.buildDirectory.dir('generated/jniLibs'))
+
+    packaging {
+        jniLibs {
+            // Extract launcher ELFs to nativeLibraryDir, which is executable on Android.
+            useLegacyPackaging = true
+        }
+    }
     namespace 'com.meraj.nicejavaide'
     compileSdk 35
 
@@ -121,6 +129,35 @@ def jdkArchive = layout.projectDirectory.file('src/main/assets/jdk21-android.tar
 def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.4/jdk21-android.tar.gz'
 def jdkSha256 = '9e38b66557db40481d90a6f5cfbce05180414e3131a6b77c4dea1304fcba6e9b'
 
+def jdkLauncherOutput = layout.buildDirectory.dir('generated/jniLibs/arm64-v8a')
+
+tasks.register('bundleJdkLaunchers') {
+    dependsOn tasks.named('downloadOpenJdk21')
+    outputs.dir(jdkLauncherOutput)
+    doLast {
+        def outputDir = jdkLauncherOutput.get().asFile
+        delete outputDir
+        outputDir.mkdirs()
+        copy {
+            from tarTree(resources.gzip(jdkArchive))
+            include '**/bin/java'
+            include '**/bin/javac'
+            eachFile { details ->
+                details.path = details.name == 'java' ? 'libnicejava.so' : 'libnicejavac.so'
+            }
+            includeEmptyDirs = false
+            into outputDir
+        }
+        ['libnicejava.so', 'libnicejavac.so'].each { launcherName ->
+            def launcher = new File(outputDir, launcherName)
+            if (!launcher.isFile() || launcher.length() < 1024) {
+                throw new GradleException('Could not extract JDK launcher ' + launcherName + ' from ' + jdkArchive.asFile)
+            }
+            launcher.setExecutable(true, false)
+        }
+        logger.lifecycle('Bundled executable JDK launchers for Android nativeLibraryDir')
+    }
+}
 tasks.register('downloadOpenJdk21') {
     outputs.file(jdkArchive)
     doLast {
@@ -169,6 +206,7 @@ tasks.register('downloadOpenJdk21') {
 
 tasks.named('preBuild').configure {
     dependsOn tasks.named('downloadOpenJdk21')
+    dependsOn tasks.named('bundleJdkLaunchers')
     dependsOn tasks.named('downloadKotlinCompiler')
     dependsOn tasks.named('bundleJavaProjectLibraries')
 }
