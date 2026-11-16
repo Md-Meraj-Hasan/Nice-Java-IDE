@@ -193,11 +193,20 @@ tasks.register('verifyOfflineBundles') {
         if (jars.isEmpty()) {
             throw new GradleException("No Java project JAR libraries were bundled into ${libs}")
         }
-        def invalid = jars.findAll { !it.isFile() || it.length() < 22 }
-        if (!invalid.isEmpty()) {
-            throw new GradleException("Invalid/empty Java project JAR(s): ${invalid}")
+        def invalid = jars.findAll { jar ->
+            if (!jar.isFile() || jar.length() < 22) return true
+            try {
+                def archive = new java.util.zip.ZipFile(jar)
+                try { return !archive.entries().hasMoreElements() }
+                finally { archive.close() }
+            } catch (Exception badZip) {
+                return true
+            }
         }
-        logger.lifecycle("Offline bundles verified: OpenJDK=${jdk.length()} bytes, Kotlin=${kotlin.length()} bytes, Java libraries=${jars.size()} JARs")
+        if (!invalid.isEmpty()) {
+            throw new GradleException("Invalid/corrupt Java project JAR(s): ${invalid}")
+        }
+        logger.lifecycle("Offline bundles verified: OpenJDK=${jdk.length()} bytes, Kotlin=${kotlin.length()} bytes, Java libraries=${jars.size()} valid JARs")
     }
 }
 
