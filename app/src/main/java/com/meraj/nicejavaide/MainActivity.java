@@ -211,7 +211,7 @@ public class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface
         public void tools() {
-            runOnUiThread(() -> showIdeMenu(ideWebView, 5));
+            runOnUiThread(() -> showToolsDialog());
         }
 
         @android.webkit.JavascriptInterface
@@ -344,6 +344,39 @@ public class MainActivity extends Activity {
                 break;
         }
         popup.show();
+    }
+
+    private void showToolsDialog() {
+        final String[] items = {
+                "Install OpenJDK 21",
+                "Install Java Project Libraries",
+                "Java: java",
+                "Java Compiler: javac",
+                "JAR Tool: jar",
+                "Javadoc",
+                "JShell",
+                "Keytool",
+                "Kotlin Compiler",
+                "HTML / CSS / JS Preview"
+        };
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Tools")
+                .setItems(items, (dialog, which) -> {
+                    switch (which) {
+                        case 0: installBundledJdk(); break;
+                        case 1: installJavaProjectLibraries(); break;
+                        case 2: runJdkTool("java"); break;
+                        case 3: runJdkTool("javac"); break;
+                        case 4: runJdkTool("jar"); break;
+                        case 5: runJdkTool("javadoc"); break;
+                        case 6: runJdkTool("jshell"); break;
+                        case 7: runJdkTool("keytool"); break;
+                        case 8: runJdkTool("kotlinc"); break;
+                        case 9: previewCurrentHtml(); break;
+                    }
+                })
+                .setNegativeButton("Close", null)
+                .show();
     }
 
     private void runJdkTool(String toolName) {
