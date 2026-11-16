@@ -1627,7 +1627,20 @@ public class MainActivity extends Activity {
             throw new IllegalStateException("JDK executable is missing or not executable: " + executable.getAbsolutePath());
         }
         List<String> command = new ArrayList<>();
-        command.add(executable.getAbsolutePath());
+        // The JDK's bin/javac is a shell launcher script. Android app-private
+        // filesystems may be mounted noexec, and linker64 cannot launch scripts.
+        // Invoke javac through the real ELF java launcher instead.
+        if ("javac".equals(executable.getName()) || "javac.exe".equals(executable.getName())) {
+            File javaLauncher = new File(jdkHome, "bin/java");
+            if (!javaLauncher.isFile()) {
+                throw new IllegalStateException("OpenJDK java launcher is missing: " + javaLauncher);
+            }
+            command.add(javaLauncher.getAbsolutePath());
+            command.add("-m");
+            command.add("jdk.compiler/com.sun.tools.javac.Main");
+        } else {
+            command.add(executable.getAbsolutePath());
+        }
         java.util.Collections.addAll(command, args);
         File outputFile = File.createTempFile("nicejava-process-", ".log", getCacheDir());
         Process process = null;
