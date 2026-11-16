@@ -398,6 +398,11 @@ public class MainActivity extends Activity {
                     try {
                         File executable = new File(new File(jdkHome, "bin"), toolName);
                         if (!executable.exists()) executable = new File(new File(jdkHome, "bin"), toolName + ".exe");
+                        if ("java".equals(toolName) || "javac".equals(toolName)) {
+                            File packaged = new File(getApplicationInfo().nativeLibraryDir,
+                                    "java".equals(toolName) ? "libnicejava.so" : "libnicejavac.so");
+                            if (packaged.isFile() && packaged.canExecute()) executable = packaged;
+                        }
                         if (!executable.exists()) throw new java.io.IOException(toolName + " is not available in this JDK build.");
                         List<String> command = new ArrayList<>();
                         command.add(executable.getAbsolutePath());
