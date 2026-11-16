@@ -1605,12 +1605,12 @@ public class MainActivity extends Activity {
                 android.R.style.Theme_Material_NoActionBar_Fullscreen);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(0xFF090E18);
+        page.setBackgroundColor(0xFFF2F5FA);
 
         LinearLayout header = new LinearLayout(this);
         header.setGravity(android.view.Gravity.CENTER_VERTICAL);
         header.setPadding(dp(18), dp(12), dp(12), dp(12));
-        header.setBackgroundColor(0xFF151E2D);
+        header.setBackgroundColor(0xFFE7EDF6);
         TextView heading = new TextView(this);
         heading.setText(success ? "OUTPUT" : "ERROR");
         heading.setTextColor(success ? 0xFF65D6A3 : 0xFFFF8585);
@@ -1628,7 +1628,7 @@ public class MainActivity extends Activity {
         TextView console = new TextView(this);
         console.setText(output);
         console.setTextIsSelectable(true);
-        console.setTextColor(0xFFE5E7EB);
+        console.setTextColor(0xFF182235);
         console.setTextSize(15);
         console.setTypeface(android.graphics.Typeface.MONOSPACE);
         console.setPadding(dp(18), dp(18), dp(18), dp(18));
@@ -1651,7 +1651,7 @@ public class MainActivity extends Activity {
         android.widget.ScrollView verticalScroll = new android.widget.ScrollView(this);
         verticalScroll.setFillViewport(true);
         verticalScroll.setVerticalScrollBarEnabled(true);
-        verticalScroll.setBackgroundColor(0xFF0B1220);
+        verticalScroll.setBackgroundColor(0xFFFFFFFF);
         verticalScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         verticalScroll.addView(horizontalScroll, new android.widget.ScrollView.LayoutParams(
                 android.widget.ScrollView.LayoutParams.MATCH_PARENT,
@@ -1665,8 +1665,8 @@ public class MainActivity extends Activity {
             dialog.getWindow().setLayout(
                     android.view.WindowManager.LayoutParams.MATCH_PARENT,
                     android.view.WindowManager.LayoutParams.MATCH_PARENT);
-            dialog.getWindow().setStatusBarColor(0xFF090E18);
-            dialog.getWindow().setNavigationBarColor(0xFF090E18);
+            dialog.getWindow().setStatusBarColor(0xFFF2F5FA);
+            dialog.getWindow().setNavigationBarColor(0xFFF2F5FA);
         }
     }
 
