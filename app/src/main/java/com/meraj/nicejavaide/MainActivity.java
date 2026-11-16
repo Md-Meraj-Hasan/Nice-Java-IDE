@@ -411,7 +411,19 @@ public class MainActivity extends Activity {
                             // Deliberately simple whitespace tokenization; quoted shell expressions are not evaluated.
                             for (String part : raw.split("\\s+")) command.add(part);
                         }
-                        Process process = new ProcessBuilder(command).directory(workspace).redirectErrorStream(true).start();
+                        ProcessBuilder toolBuilder = new ProcessBuilder(command)
+                                .directory(workspace)
+                                .redirectErrorStream(true);
+                        // Match the environment used by the working Run pipeline.
+                        // The Android-packaged launcher needs libjli.so from JDK lib/.
+                        java.util.Map<String, String> toolEnv = toolBuilder.environment();
+                        toolEnv.put("JAVA_HOME", jdkHome.getAbsolutePath());
+                        toolEnv.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + toolEnv.get("PATH"));
+                        String jdkLib = new File(jdkHome, "lib").getAbsolutePath();
+                        String jdkServer = new File(jdkHome, "lib/server").getAbsolutePath();
+                        String nativeLib = getApplicationInfo().nativeLibraryDir;
+                        toolEnv.put("LD_LIBRARY_PATH", nativeLib + ":" + jdkServer + ":" + jdkLib);
+                        Process process = toolBuilder.start();
                         ByteArrayOutputStream output = new ByteArrayOutputStream();
                         try (InputStream input = process.getInputStream()) {
                             byte[] buffer = new byte[4096]; int count;
