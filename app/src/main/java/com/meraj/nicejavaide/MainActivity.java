@@ -1549,6 +1549,37 @@ public class MainActivity extends Activity {
                 List<File> sources = new ArrayList<>();
                 collectJavaFiles(workspace, sources);
                 if (sources.isEmpty()) throw new IllegalStateException("No .java source files found in Workspace.");
+
+                String sourceText = readText(currentFile);
+                java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
+                        .compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;")
+                        .matcher(sourceText);
+                String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
+                java.util.regex.Matcher classMatcher = java.util.regex.Pattern
+                        .compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)")
+                        .matcher(sourceText);
+                String className = classMatcher.find() ? classMatcher.group(1) :
+                        currentFile.getName().substring(0, currentFile.getName().length() - 5);
+
+                // Java requires a public top-level type to match its .java filename.
+                // Compile the active editor file from a temporary correctly named copy,
+                // leaving the user's original file and workspace untouched.
+                File compileSource = currentFile;
+                String expectedSourceName = className + ".java";
+                if (!currentFile.getName().equals(expectedSourceName)) {
+                    File staging = new File(getFilesDir(), "java-build/staged-source");
+                    deleteTree(staging);
+                    if (!staging.mkdirs()) throw new IllegalStateException("Cannot create temporary Java source folder.");
+                    compileSource = new File(staging, expectedSourceName);
+                    writeText(compileSource, sourceText);
+                    for (int sourceIndex = 0; sourceIndex < sources.size(); sourceIndex++) {
+                        if (sources.get(sourceIndex).getCanonicalFile().equals(currentFile.getCanonicalFile())) {
+                            sources.set(sourceIndex, compileSource);
+                            break;
+                        }
+                    }
+                }
+
                 deleteTree(classes);
                 if (!classes.mkdirs()) throw new IllegalStateException("Cannot create build output folder.");
                 List<String> compileArgs = new ArrayList<>();
@@ -1560,16 +1591,6 @@ public class MainActivity extends Activity {
                 compileArgs.add(classes.getAbsolutePath());
                 for (File source : sources) compileArgs.add(source.getAbsolutePath());
                 String compileOutput = runJdkCommand(new File(jdkHome, "bin/javac"), compileArgs.toArray(new String[0]));
-                String sourceText = readText(currentFile);
-                java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
-                        .compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;")
-                        .matcher(sourceText);
-                String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
-                java.util.regex.Matcher classMatcher = java.util.regex.Pattern
-                        .compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)")
-                        .matcher(sourceText);
-                String className = classMatcher.find() ? classMatcher.group(1) :
-                        currentFile.getName().substring(0, currentFile.getName().length() - 5);
                 String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
                 String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-Dfile.encoding=UTF-8",
                         "-cp", classes.getAbsolutePath() + File.pathSeparator + libraryClasspath, mainClass);
