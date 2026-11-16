@@ -2,18 +2,18 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Nice Java IDE</title><link rel="stylesheet" href="codemirror.min.css"><link rel="stylesheet" href="material-darker.min.css">
 <style>
-:root{color-scheme:dark;--bg:#090e18;--panel:#111a2a;--panel2:#172338;--line:#26364d;--txt:#e6edf7;--muted:#91a3bb;--blue:#3978f6;--green:#29c477}
+:root{color-scheme:light;--bg:#f2f5fa;--panel:#e7edf6;--panel2:#fff;--line:#cbd5e1;--txt:#182235;--muted:#526176;--blue:#3978f6;--green:#159b65}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--txt);font:14px system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden;touch-action:pan-x pan-y}
 .app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
-.header{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#0d1523;border-bottom:1px solid var(--line);flex-shrink:0}
-.brand{font-size:19px;font-weight:750}.brand span{color:#70a2ff}.header-actions{display:flex;gap:8px}
+.header{height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#0d1523;border-bottom:1px solid var(--line);flex-shrink:0}
+.brand{font-size:18px;font-weight:750}.brand span{color:#70a2ff}.header-actions{display:flex;gap:8px}
 button{font:inherit;color:var(--txt);border:1px solid var(--line);background:var(--panel2);border-radius:7px;padding:8px 11px;min-height:36px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 button:active{filter:brightness(1.25)}button.run{background:#126b4b;border-color:#19865f;color:#fff;font-weight:700}
-.ribbon{display:flex;align-items:stretch;gap:0;padding:0 5px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto;flex-shrink:0;scrollbar-width:none}
-.group{position:relative;display:flex;align-items:center;gap:3px;padding:5px 6px;border-right:1px solid #34435a;flex:0 0 auto}
-.group:last-child{border-right:0}.group-title{font-size:10px;letter-spacing:.5px;color:#8fa3bd;text-transform:uppercase;padding:0 5px;white-space:nowrap}.tools-menu-btn{position:relative;z-index:3;min-height:34px!important;padding:5px 12px!important;border:1px solid #3978f6!important;border-radius:7px!important;background:#1b3154!important;color:#ffffff!important;font-size:13px!important;font-weight:700!important;letter-spacing:0!important;text-transform:none!important;pointer-events:auto!important;opacity:1!important}
-.group button{min-height:34px;padding:5px 9px;white-space:nowrap;border-color:transparent;background:transparent;font-size:13px}
-.filebar{height:37px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#101a2a;border-bottom:1px solid var(--line);flex-shrink:0;color:#9fb5d5}
+.ribbon{height:38px;display:flex;align-items:stretch;gap:0;padding:0 5px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+.group{position:relative;display:flex;align-items:center;gap:3px;padding:3px 5px;border-right:1px solid #34435a;flex:0 0 auto}
+.group:last-child{border-right:0}.group-title{font-size:11px;letter-spacing:.2px;color:#526176;text-transform:none;padding:4px 8px;white-space:nowrap;border:1px solid #c4d2e4;border-radius:6px;background:#f8fbff;font-weight:700;min-height:30px}.section-toggle{cursor:pointer}.group:not(.expanded) button[data-action]{display:none}.group.expanded{background:#dce8f8}.group.expanded .section-toggle{background:#c9dcf7;border-color:#8eb5ed;color:#173b70}.tools-menu-btn{position:relative;z-index:3;min-height:34px!important;padding:5px 12px!important;border:1px solid #3978f6!important;border-radius:7px!important;background:#1b3154!important;color:#ffffff!important;font-size:13px!important;font-weight:700!important;letter-spacing:0!important;text-transform:none!important;pointer-events:auto!important;opacity:1!important}
+.group button{min-height:30px;padding:4px 8px;white-space:nowrap;border-color:transparent;background:transparent;font-size:13px}
+.filebar{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#101a2a;border-bottom:1px solid var(--line);flex-shrink:0;color:#9fb5d5}
 .file-dot{width:8px;height:8px;border-radius:50%;background:#67a0ff}.file-name{font-weight:650;color:#d9e5f7}
 .editor-wrap{flex:1;min-height:0;overflow:hidden;background:#151b25}.CodeMirror{height:100%;font:14px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;background:#151b25;color:#e4eaf4;touch-action:pan-x pan-y}.CodeMirror-gutters{background:#151b25;border-right:1px solid #273246}.CodeMirror-linenumber{color:#64748b}.CodeMirror-lines{padding:12px 0}.CodeMirror pre{padding-left:5px}
 #fixed-toolbar{display:none;background:#101a2a;border-top:1px solid var(--line);padding:5px 6px;flex-shrink:0;user-select:none}
@@ -23,15 +23,15 @@ body.editor-focused #fixed-toolbar{display:block}
 .symbol-btn{min-width:36px;height:34px;min-height:34px;padding:4px 9px;border:1px solid #30425d;border-radius:6px;background:#1b2940;color:#e6edf7;font:14px ui-monospace,monospace;flex:0 0 auto}
 .symbol-btn.prime-btn{background:#263c5d}.symbol-btn.nav-btn{min-width:34px}
 .status{height:24px;display:flex;align-items:center;padding:0 12px;color:#91a3bb;font-size:11px;background:#0b1320;border-top:1px solid var(--line);flex-shrink:0}
-body.light{--bg:#f2f5fa;--panel:#e7edf6;--panel2:#fff;--line:#cbd5e1;--txt:#182235;--muted:#526176}
-body.light .header,body.light .ribbon,body.light .status{background:#e9eff8}body.light .filebar{background:#f7f9fc}body.light .editor-wrap,body.light .CodeMirror,body.light .CodeMirror-gutters{background:#fff;color:#172033}body.light #fixed-toolbar{background:#e9eff8}body.light .symbol-btn{background:#dce5f2;color:#172033;border-color:#c2cedd}
-</style></head><body><main class="app">
+body.dark{color-scheme:dark;--bg:#090e18;--panel:#111a2a;--panel2:#172338;--line:#26364d;--txt:#e6edf7;--muted:#91a3bb}
+body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.dark .filebar{background:#101a2a}body.dark .editor-wrap,body.dark .CodeMirror,body.dark .CodeMirror-gutters{background:#151b25;color:#e4eaf4}body.dark #fixed-toolbar{background:#101a2a}body.dark .symbol-btn{background:#1b2940;color:#e6edf7;border-color:#30425d}body.dark .group-title{background:#172338;color:#b9c8dc;border-color:#34435a}body.dark .group.expanded{background:#1b2940}
+</style></head><body class="light"><main class="app">
 <header class="header"><div class="brand">Nice<span>Java</span> IDE</div><div class="header-actions"><button id="themeBtn" aria-label="Theme">☼</button><button class="run" id="runBtn">▶ Run</button></div></header>
 <nav class="ribbon" aria-label="IDE tools">
- <section class="group"><span class="group-title">File</span><button data-action="new">＋ New</button><button data-action="open">Open</button><button data-action="save">Save</button><button data-action="saveas">Save As</button></section>
- <section class="group"><span class="group-title">Edit</span><button data-action="undo">↶</button><button data-action="redo">↷</button><button data-action="find">Find</button></section>
- <section class="group"><span class="group-title">Project</span><button data-action="files">Files</button><button data-action="folders">Folders</button><button data-action="kotlin">Kotlin</button></section>
- <section class="group"><button type="button" id="toolsBtn" class="tools-menu-btn" aria-label="Open Tools menu">Tools ▾</button><button data-action="jdk">JDK</button><button data-action="libs">Libraries</button></section>
+ <section class="group"><button type="button" class="group-title section-toggle" aria-expanded="false">File ▾</button><button data-action="new">＋ New</button><button data-action="open">Open</button><button data-action="save">Save</button><button data-action="saveas">Save As</button></section>
+ <section class="group"><button type="button" class="group-title section-toggle" aria-expanded="false">Edit ▾</button><button data-action="undo">↶</button><button data-action="redo">↷</button><button data-action="find">Find</button></section>
+ <section class="group"><button type="button" class="group-title section-toggle" aria-expanded="false">Project ▾</button><button data-action="files">Files</button><button data-action="folders">Folders</button><button data-action="kotlin">Kotlin</button></section>
+ <section class="group"><button type="button" id="toolsBtn" class="tools-menu-btn" aria-label="Open Tools menu">Tools ▾</button><button type="button" class="group-title section-toggle" aria-expanded="false">Runtime ▾</button><button data-action="jdk">JDK</button><button data-action="libs">Libraries</button></section>
 </nav>
 <div class="filebar"><span class="file-dot"></span><span class="file-name" id="fileName">Main.java</span><span style="margin-left:auto;color:#8094b0">JAVA</span></div>
 <div class="editor-wrap" id="editorWrap"><textarea id="source"></textarea></div>
@@ -59,7 +59,7 @@ body.light .header,body.light .ribbon,body.light .status{background:#e9eff8}body
  CodeMirror.defineMode('nicejava',function(){return{startState:function(){return{comment:false,str:null}},token:function(s,st){if(s.eatSpace())return null;if(st.comment){if(s.skipTo('*/')){s.match('*/');st.comment=false}else s.skipToEnd();return 'comment'}if(st.str){while(!s.eol()){let c=s.next();if(c===st.str){st.str=null;break}if(c==='\\')s.next()}return 'string'}if(s.match('//')){s.skipToEnd();return 'comment'}if(s.match('/*')){st.comment=true;return 'comment'}if(s.match(/^"(?:[^"\\]|\\.)*"|^\x27(?:[^\x27\\]|\\.)*\x27/))return 'string';if(s.match(/^(?:package|import|public|private|protected|static|final|class|interface|enum|extends|implements|void|int|long|double|float|boolean|char|byte|short|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|throws|this|super|var|record)\b/))return 'keyword';if(s.match(/^(?:true|false|null)\b/))return 'atom';if(s.match(/^\d+(?:\.\d+)?[fFdDlL]?/))return 'number';if(s.match(/^[A-Z][\w$]*/))return 'type';if(s.match(/^[A-Za-z_$][\w$]*(?=\s*\()/))return 'def';s.next();return null}}});
  let editor;
  try{
-  editor=CodeMirror.fromTextArea(source,{mode:'nicejava',theme:'material-darker',lineNumbers:true,indentUnit:4,tabSize:4,indentWithTabs:false,lineWrapping:false,viewportMargin:30});
+  editor=CodeMirror.fromTextArea(source,{mode:'nicejava',theme:'default',lineNumbers:true,indentUnit:4,tabSize:4,indentWithTabs:false,lineWrapping:false,viewportMargin:30});
   let initial='public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Nice Java IDE!");\n    }\n}\n';
   if(window.NativeIDE&&typeof NativeIDE.initialCode==='function')initial=NativeIDE.initialCode()||initial;
   editor.setValue(initial);
@@ -76,10 +76,16 @@ body.light .header,body.light .ribbon,body.light .status{background:#e9eff8}body
  document.querySelectorAll('[data-pair]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();insert(b.getAttribute('data-pair'),true)}));
  document.querySelectorAll('[data-move]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();const d=b.dataset.move;editor.focus();editor.execCommand(({up:'goLineUp',down:'goLineDown',left:'goCharLeft',right:'goCharRight'})[d])}));
  document.querySelector('[data-key="tab"]').addEventListener('pointerdown',e=>{e.preventDefault();insert('    ')});
+ document.querySelectorAll('.section-toggle').forEach(toggle=>toggle.addEventListener('click',()=>{
+  const group=toggle.closest('.group');
+  const willOpen=!group.classList.contains('expanded');
+  document.querySelectorAll('.ribbon .group').forEach(g=>{g.classList.remove('expanded');const t=g.querySelector('.section-toggle');if(t)t.setAttribute('aria-expanded','false')});
+  if(willOpen){group.classList.add('expanded');toggle.setAttribute('aria-expanded','true')}
+ }));
  document.getElementById('toolsBtn').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();report('Opening Tools menu…');nativeCall('tools')});
  document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;const map={new:'newFile',open:'open',save:'save',saveas:'saveAs',files:'files',folders:'setupFolders',kotlin:'newKotlin',jdk:'installJdk',libs:'installLibraries'};if(a==='undo'){editor.undo();return}if(a==='redo'){editor.redo();return}if(a==='find'){let q=prompt('Find text');if(q){let at=editor.getValue().indexOf(q);if(at>=0){editor.setSelection(editor.posFromIndex(at),editor.posFromIndex(at+q.length));editor.focus()}else report('Text not found')}return}if(a==='save'||a==='saveas'||a==='new'||a==='open')sync();nativeCall(map[a])}));
  document.getElementById('runBtn').addEventListener('click',()=>{sync();report('Compiling and running…');nativeCall('run')});
- document.getElementById('themeBtn').addEventListener('click',()=>{document.body.classList.toggle('light');editor.setOption('theme',document.body.classList.contains('light')?'default':'material-darker')});
+ document.getElementById('themeBtn').addEventListener('click',()=>{document.body.classList.toggle('light');document.body.classList.toggle('dark');document.body.classList.toggle('light');editor.setOption('theme',document.body.classList.contains('dark')?'material-darker':'default')});
  document.addEventListener('focusin',e=>{if(e.target.closest('.CodeMirror'))document.body.classList.add('editor-focused')});
  document.addEventListener('focusout',e=>{if(e.target.closest('.CodeMirror'))setTimeout(()=>{if(!document.activeElement.closest('#fixed-toolbar'))document.body.classList.remove('editor-focused')},250)});
  window.addEventListener('error',e=>report('JS error: '+(e.message||'unknown')));
