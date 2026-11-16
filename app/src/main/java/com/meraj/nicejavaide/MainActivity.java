@@ -1593,7 +1593,7 @@ public class MainActivity extends Activity {
         for (String line : output.split("\\r?\\n")) {
             // Hide Android linker DT_RPATH warnings; these are not program output.
             if (line.startsWith("WARNING: linker: Warning:")) continue;
-            if (cleaned.length() > 0) cleaned.append('\\n');
+            if (cleaned.length() > 0) cleaned.append('\n');
             cleaned.append(line);
         }
         return cleaned.toString().trim().isEmpty()
