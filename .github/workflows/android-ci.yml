@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "fix/jdk-asset-packaging" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -12,32 +12,56 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js for preview tests
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Run browser preview automated tests
         run: node --test web-preview/tests/*.test.cjs
 
+      - name: Validate offline CodeMirror mobile IDE assets
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const vm = require('vm');
+          const html = fs.readFileSync('app/src/main/assets/ide/index.html', 'utf8');
+          const assetDir = 'app/src/main/assets/ide/';
+          for (const asset of ['codemirror.min.js', 'codemirror.min.css', 'material-darker.min.css']) {
+            const assetPath = assetDir + asset;
+            if (!fs.existsSync(assetPath) || fs.statSync(assetPath).size < 100) {
+              throw new Error('Missing or invalid IDE asset: ' + assetPath);
+            }
+          }
+          if (!html.includes('src="file:///android_asset/ide/codemirror.min.js"')) {
+            throw new Error('index.html does not load the packaged CodeMirror JS asset');
+          }
+          // Parse both JavaScript sources independently. This catches corruption
+          // inside the minified vendor bundle as well as the app controller.
+          new vm.Script(fs.readFileSync(assetDir + 'codemirror.min.js', 'utf8'));
+          const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+          if (scripts.length !== 1) throw new Error('Expected exactly one inline IDE controller script');
+          new vm.Script(scripts[0][1]);
+          console.log('CodeMirror JS, CSS references, script tags and IDE controller syntax verified');
+          NODE
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.13'
 
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --warning-mode all :app:assembleDebug
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Nice-Java-IDE-debug
           path: app/build/outputs/apk/debug/app-debug.apk

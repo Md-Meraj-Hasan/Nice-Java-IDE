@@ -38,6 +38,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -54,6 +55,7 @@ public class MainActivity extends Activity {
             "}\n";
 
     private EditText editor;
+    private WebView ideWebView;
     private TextView status;
     private TextView fileLabel;
     private LinearLayout tabBar;
@@ -89,112 +91,166 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(10), dp(8), dp(10), dp(8));
-        root.setBackgroundColor(0xFF111827);
-
-        TextView heading = new TextView(this);
-        heading.setText("Nice Java IDE");
-        heading.setTextColor(0xFFF9FAFB);
-        heading.setTextSize(21);
-        heading.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
-        heading.setPadding(dp(4), dp(5), dp(4), dp(7));
-        root.addView(heading);
-
-        // Windows-style IDE menu bar. Existing toolbar shortcuts remain below it.
-        HorizontalScrollView menuScroll = new HorizontalScrollView(this);
-        menuScroll.setHorizontalScrollBarEnabled(false);
-        menuScroll.setFillViewport(false);
-        LinearLayout menuBar = new LinearLayout(this);
-        menuBar.setOrientation(LinearLayout.HORIZONTAL);
-        menuBar.setBackgroundColor(0xFF1F2937);
-        addMenuButton(menuBar, "File", 1);
-        addMenuButton(menuBar, "Edit", 2);
-        addMenuButton(menuBar, "Search", 3);
-        addMenuButton(menuBar, "View", 4);
-        addMenuButton(menuBar, "Tools", 5);
-        addMenuButton(menuBar, "Run", 6);
-        addMenuButton(menuBar, "Help", 7);
-        menuScroll.addView(menuBar);
-        root.addView(menuScroll);
-
-        HorizontalScrollView toolbarScroll = new HorizontalScrollView(this);
-        toolbarScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout toolbar = new LinearLayout(this);
-        toolbar.setOrientation(LinearLayout.HORIZONTAL);
-        addTool(toolbar, "New", v -> newFile());
-        addTool(toolbar, "Kotlin", v -> promptNewKotlinFile());
-        addTool(toolbar, "Files", v -> showWorkspaceFiles());
-        addTool(toolbar, "Setup Folders", v -> setupJavaStorage());
-        addTool(toolbar, "Open", v -> openDocument());
-        addTool(toolbar, "Save", v -> saveFile());
-        addTool(toolbar, "Save As", v -> saveAs());
-        addTool(toolbar, "Find", v -> showFind());
-        addTool(toolbar, "Replace", v -> showReplace());
-        addTool(toolbar, "Undo", v -> undo());
-        addTool(toolbar, "Redo", v -> redo());
-        addTool(toolbar, "Device", v -> showDeviceInfo());
-        addTool(toolbar, "Install JDK", v -> installBundledJdk());
-        addTool(toolbar, "Libraries", v -> installJavaProjectLibraries());
-        addTool(toolbar, "Run", v -> runCurrentProject());
-        addTool(toolbar, "Preview", v -> previewCurrentHtml());
-        toolbarScroll.addView(toolbar);
-        root.addView(toolbarScroll);
-
-        fileLabel = new TextView(this);
-        fileLabel.setTextColor(0xFF93C5FD);
-        fileLabel.setTextSize(12);
-        fileLabel.setPadding(dp(5), dp(12), dp(5), dp(6));
-        root.addView(fileLabel);
-
-        HorizontalScrollView tabsScroll = new HorizontalScrollView(this);
-        tabsScroll.setHorizontalScrollBarEnabled(false);
-        tabBar = new LinearLayout(this);
-        tabBar.setOrientation(LinearLayout.HORIZONTAL);
-        tabsScroll.addView(tabBar);
-        root.addView(tabsScroll);
-
+        // Keep the native EditText as the bridge to the existing Java/Kotlin
+        // compiler and file-management code. The visible editor is CodeMirror.
         editor = new EditText(this);
-        editor.setGravity(Gravity.TOP | Gravity.START);
-        editor.setTextSize(14);
-        editor.setTypeface(android.graphics.Typeface.MONOSPACE);
-        editor.setTextColor(0xFFE5E7EB);
-        editor.setHintTextColor(0xFF6B7280);
-        editor.setHint("Write code here...");
-        editor.setBackgroundColor(0xFF0B1220);
-        editor.setPadding(dp(12), dp(12), dp(12), dp(12));
-        editor.setHorizontallyScrolling(true);
-        editor.setMinLines(18);
-        editor.setTextIsSelectable(true);
-        editor.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-            @Override public void afterTextChanged(Editable editable) {
-                String current = editable.toString();
-                if (!restoringEditor && !current.equals(lastEditorText)) {
-                    undoStack.push(lastEditorText);
-                    while (undoStack.size() > HISTORY_LIMIT) undoStack.removeLast();
-                    redoStack.clear();
-                    lastEditorText = current;
-                }
-                CodeSyntaxHighlighter.apply(editable, getCurrentExtension());
+        editor.setText(STARTER);
+        editor.setVisibility(View.GONE);
+        status = new TextView(this);
+        status.setVisibility(View.GONE);
+
+        ideWebView = new WebView(this);
+        WebSettings settings = ideWebView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        ideWebView.setBackgroundColor(0xFFF2F5FA);
+        ideWebView.setWebChromeClient(new android.webkit.WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
+                android.util.Log.e("NiceJava-WebView",
+                        message.message() + " -- " + message.sourceId() + ":" + message.lineNumber());
+                return true;
             }
         });
-        LinearLayout.LayoutParams editorParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
-        editorParams.topMargin = dp(8);
-        root.addView(editor, editorParams);
+        ideWebView.setWebViewClient(new android.webkit.WebViewClient() {
+            @Override
+            public void onReceivedError(WebView view, android.webkit.WebResourceRequest request,
+                                        android.webkit.WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                String detail = "WebView resource error: " + request.getUrl()
+                        + " | code=" + error.getErrorCode()
+                        + " | " + error.getDescription()
+                        + " | mainFrame=" + request.isForMainFrame();
+                android.util.Log.e("NiceJava-WebView", detail);
+                if (request.isForMainFrame() && status != null) status.setText(detail);
+            }
 
-        status = new TextView(this);
-        status.setTextColor(0xFFFBBF24);
-        status.setTextSize(11);
-        status.setPadding(dp(5), dp(10), dp(5), dp(4));
-        root.addView(status);
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                String code = editor == null ? STARTER : editor.getText().toString();
+                view.evaluateJavascript("window.setEditorCode && window.setEditorCode(" +
+                        org.json.JSONObject.quote(code) + ")", null);
+                String name = currentFile == null ? "Main.java" : currentFile.getName();
+                view.evaluateJavascript("window.setFileName && window.setFileName(" +
+                        org.json.JSONObject.quote(name) + ")", null);
+                // Wait briefly for WebView to finish loading local JS assets, then
+                // report exact startup state without hiding the page's own error message.
+                view.postDelayed(() -> view.evaluateJavascript(
+                        "(function(){var cm=window.CodeMirror;var ed=document.querySelector('.CodeMirror');" +
+                        "var src=document.getElementById('source');var st=document.getElementById('status');" +
+                        "return JSON.stringify({url:location.href,readyState:document.readyState," +
+                        "codeMirror:typeof cm,fromTextArea:!!(cm&&cm.fromTextArea),editorNode:!!ed," +
+                        "sourceTextarea:!!src,status:st?st.textContent:'missing'});})()",
+                        result -> android.util.Log.i("NiceJava-WebView", "Startup diagnostics: " + result)), 500);
+            }
+        });
+        ideWebView.addJavascriptInterface(new NiceIdeBridge(), "NativeIDE");
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(0xFFF2F5FA);
+        root.addView(ideWebView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(editor, new LinearLayout.LayoutParams(1, 1));
+        root.addView(status, new LinearLayout.LayoutParams(1, 1));
         setContentView(root);
-        updateFileLabel();
+
         jdkHome = new File(getFilesDir(), "openjdk-21");
-        status.setText(isJdkInstalled() ? "OpenJDK 21 files installed" : "Full OpenJDK 21 bundled • ready to install offline");
+        ideWebView.loadUrl("file:///android_asset/ide/index.html");
+    }
+
+    public final class NiceIdeBridge {
+        @android.webkit.JavascriptInterface
+        public String initialCode() {
+            return editor == null ? STARTER : editor.getText().toString();
+        }
+
+        @android.webkit.JavascriptInterface
+        public String fileName() {
+            return currentFile == null ? "Main.java" : currentFile.getName();
+        }
+
+        @android.webkit.JavascriptInterface
+        public void changed(String code) {
+            runOnUiThread(() -> {
+                if (editor == null) return;
+                restoringEditor = true;
+                editor.setText(code == null ? "" : code);
+                lastEditorText = editor.getText().toString();
+                restoringEditor = false;
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void status(String message) {
+            runOnUiThread(() -> { if (status != null) status.setText(message == null ? "" : message); });
+        }
+
+        public void run() {
+            runOnUiThread(() -> {
+                try {
+                    saveCurrentBeforeSwitch();
+                    runCurrentProject();
+                } catch (Exception e) {
+                    showConsoleResult(false, "Unable to prepare code for running: " + e.getMessage());
+                }
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void save() {
+            runOnUiThread(() -> saveFile());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void open() {
+            runOnUiThread(() -> openDocument());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void saveAs() {
+            runOnUiThread(() -> MainActivity.this.saveAs());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void newFile() {
+            runOnUiThread(() -> MainActivity.this.newFile());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void files() {
+            runOnUiThread(() -> showWorkspaceFiles());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setupFolders() {
+            runOnUiThread(() -> setupJavaStorage());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void installJdk() {
+            runOnUiThread(() -> installBundledJdk());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void installLibraries() {
+            runOnUiThread(() -> installJavaProjectLibraries());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void tools() {
+            runOnUiThread(() -> showToolsDialog());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void newKotlin() {
+            runOnUiThread(() -> promptNewKotlinFile());
+        }
     }
 
     private void setEditorText(String value) {
@@ -204,6 +260,10 @@ public class MainActivity extends Activity {
         undoStack.clear();
         redoStack.clear();
         restoringEditor = false;
+        if (ideWebView != null) {
+            String safe = org.json.JSONObject.quote(value == null ? "" : value);
+            ideWebView.evaluateJavascript("window.setEditorCode && window.setEditorCode(" + safe + ")", null);
+        }
     }
 
     private void undo() {
@@ -319,6 +379,76 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
+    private void showToolsDialog() {
+        final String[] items = {
+                "Install OpenJDK 21",
+                "Install Java Project Libraries",
+                "Java: java",
+                "Java Compiler: javac",
+                "JAR Tool: jar",
+                "Javadoc",
+                "JShell",
+                "Keytool",
+                "Kotlin Compiler",
+                "HTML / CSS / JS Preview"
+        };
+        android.app.AlertDialog toolsDialog = new android.app.AlertDialog.Builder(this)
+                .setTitle("🧰  Nice Java Tools")
+                // Populate the dialog's ListView before customizing it below.
+                // Without setItems(), getListView() is null and Tools crashes.
+                .setItems(items, null)
+                .setNegativeButton("Close", null)
+                .create();
+        toolsDialog.setOnShowListener(dialog -> {
+            android.graphics.drawable.GradientDrawable popupBg = new android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                    new int[]{0xFF172D50, 0xFF263D68, 0xFF173D49});
+            popupBg.setCornerRadius(dp(18));
+            popupBg.setStroke(dp(1), 0xFF4D8FEA);
+            toolsDialog.getWindow().setBackgroundDrawable(popupBg);
+            toolsDialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFF79AEFF);
+            int titleId = getResources().getIdentifier("alertTitle", "id", "android");
+            TextView title = toolsDialog.findViewById(titleId);
+            if (title != null) title.setTextColor(0xFFFFFFFF);
+
+            android.widget.ListView list = toolsDialog.getListView();
+            list.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            list.setDivider(new android.graphics.drawable.ColorDrawable(0xFF46658F));
+            list.setDividerHeight(dp(1));
+            android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<String>(
+                    MainActivity.this, android.R.layout.simple_list_item_1, items) {
+                @Override
+                public android.view.View getView(int position, android.view.View convertView,
+                                                 android.view.ViewGroup parent) {
+                    TextView item = (TextView) super.getView(position, convertView, parent);
+                    item.setTextColor(0xFFFFFFFF);
+                    item.setTextSize(16);
+                    item.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                    item.setPadding(dp(22), dp(13), dp(18), dp(13));
+                    item.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    return item;
+                }
+            };
+            list.setAdapter(adapter);
+            list.setOnItemClickListener((parent, view, which, id) -> {
+                toolsDialog.dismiss();
+                switch (which) {
+                    case 0: installBundledJdk(); break;
+                    case 1: installJavaProjectLibraries(); break;
+                    case 2: runJdkTool("java"); break;
+                    case 3: runJdkTool("javac"); break;
+                    case 4: runJdkTool("jar"); break;
+                    case 5: runJdkTool("javadoc"); break;
+                    case 6: runJdkTool("jshell"); break;
+                    case 7: runJdkTool("keytool"); break;
+                    case 8: runJdkTool("kotlinc"); break;
+                    case 9: previewCurrentHtml(); break;
+                }
+            });
+        });
+        toolsDialog.show();
+    }
+
     private void runJdkTool(String toolName) {
         if (!isJdkInstalled()) {
             new android.app.AlertDialog.Builder(this).setTitle("OpenJDK 21 required")
@@ -338,15 +468,44 @@ public class MainActivity extends Activity {
                     try {
                         File executable = new File(new File(jdkHome, "bin"), toolName);
                         if (!executable.exists()) executable = new File(new File(jdkHome, "bin"), toolName + ".exe");
-                        if (!executable.exists()) throw new java.io.IOException(toolName + " is not available in this JDK build.");
                         List<String> command = new ArrayList<>();
-                        command.add(executable.getAbsolutePath());
                         String raw = argsInput.getText().toString().trim();
+                        if ("jar".equals(toolName)) {
+                            // The extracted JDK lives in app-private storage, which may be mounted noexec.
+                            // Run the JAR tool as a JDK module through the packaged, executable Java launcher.
+                            File javaLauncher = new File(getApplicationInfo().nativeLibraryDir, "libnicejava.so");
+                            if (!javaLauncher.isFile() || !javaLauncher.canExecute()) {
+                                throw new java.io.IOException("Executable Android Java launcher is missing: " + javaLauncher);
+                            }
+                            command.add(javaLauncher.getAbsolutePath());
+                            command.add("-m");
+                            command.add("jdk.jartool/sun.tools.jar.Main");
+                        } else {
+                            if ("java".equals(toolName) || "javac".equals(toolName)) {
+                                File packaged = new File(getApplicationInfo().nativeLibraryDir,
+                                        "java".equals(toolName) ? "libnicejava.so" : "libnicejavac.so");
+                                if (packaged.isFile() && packaged.canExecute()) executable = packaged;
+                            }
+                            if (!executable.exists()) throw new java.io.IOException(toolName + " is not available in this JDK build.");
+                            command.add(executable.getAbsolutePath());
+                        }
                         if (!raw.isEmpty()) {
                             // Deliberately simple whitespace tokenization; quoted shell expressions are not evaluated.
                             for (String part : raw.split("\\s+")) command.add(part);
                         }
-                        Process process = new ProcessBuilder(command).directory(workspace).redirectErrorStream(true).start();
+                        ProcessBuilder toolBuilder = new ProcessBuilder(command)
+                                .directory(workspace)
+                                .redirectErrorStream(true);
+                        // Match the environment used by the working Run pipeline.
+                        // The Android-packaged launcher needs libjli.so from JDK lib/.
+                        java.util.Map<String, String> toolEnv = toolBuilder.environment();
+                        toolEnv.put("JAVA_HOME", jdkHome.getAbsolutePath());
+                        toolEnv.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + toolEnv.get("PATH"));
+                        String jdkLib = new File(jdkHome, "lib").getAbsolutePath();
+                        String jdkServer = new File(jdkHome, "lib/server").getAbsolutePath();
+                        String nativeLib = getApplicationInfo().nativeLibraryDir;
+                        toolEnv.put("LD_LIBRARY_PATH", nativeLib + ":" + jdkServer + ":" + jdkLib);
+                        Process process = toolBuilder.start();
                         ByteArrayOutputStream output = new ByteArrayOutputStream();
                         try (InputStream input = process.getInputStream()) {
                             byte[] buffer = new byte[4096]; int count;
@@ -848,8 +1007,7 @@ public class MainActivity extends Activity {
         File java = new File(jdkHome, "bin/java");
         File javac = new File(jdkHome, "bin/javac");
         File runtime = new File(jdkHome, "lib/modules");
-        return java.isFile() && javac.isFile() && runtime.isFile()
-                && java.canExecute() && javac.canExecute();
+        return java.isFile() && javac.isFile() && runtime.isFile();
     }
 
     private File getJavaLibrariesDirectory() {
@@ -997,9 +1155,18 @@ public class MainActivity extends Activity {
             try {
                 deleteTree(staging);
                 if (!staging.mkdirs()) throw new IllegalStateException("Cannot create JDK folder");
-                try (InputStream raw = getAssets().open("jdk21-android.tar.gz");
-                     GzipCompressorInputStream gzip = new GzipCompressorInputStream(raw);
-                     TarArchiveInputStream tar = new TarArchiveInputStream(gzip)) {
+                try (InputStream raw = openBundledJdkArchive();
+                     java.io.PushbackInputStream probe = new java.io.PushbackInputStream(raw, 2)) {
+                    int first = probe.read();
+                    int second = probe.read();
+                    if (second >= 0) probe.unread(second);
+                    if (first >= 0) probe.unread(first);
+                    // Depending on Android asset packaging, .tar.gz may be
+                    // delivered as a decompressed .tar entry. Detect the bytes,
+                    // not just the filename, before choosing the input stream.
+                    InputStream payload = (first == 0x1f && second == 0x8b)
+                            ? new GzipCompressorInputStream(probe) : probe;
+                    try (TarArchiveInputStream tar = new TarArchiveInputStream(payload)) {
                     TarArchiveEntry entry;
                     byte[] buffer = new byte[64 * 1024];
                     while ((entry = tar.getNextTarEntry()) != null) {
@@ -1032,6 +1199,7 @@ public class MainActivity extends Activity {
                             if ((entry.getMode() & 0111) != 0) output.setExecutable(true, false);
                         }
                     }
+                    }
                 }
                 File home = findJdkHome(staging, 0);
                 if (home == null) throw new IllegalStateException("JDK bin/java and bin/javac were not found in the archive");
@@ -1044,7 +1212,31 @@ public class MainActivity extends Activity {
                     throw new IllegalStateException("Cannot finalize JDK installation");
                 }
                 jdkHome = destination;
-                if (!isJdkInstalled()) throw new IllegalStateException("JDK compiler files are missing");
+                // Preserve executable permissions even if the extraction filesystem
+                // did not retain the TAR mode bits.
+                File binDirectory = new File(jdkHome, "bin");
+                File[] executables = binDirectory.listFiles();
+                if (executables != null) {
+                    for (File executable : executables) {
+                        if (executable.isFile()) executable.setExecutable(true, false);
+                    }
+                }
+                File javaBinary = new File(jdkHome, "bin/java");
+                File javacBinary = new File(jdkHome, "bin/javac");
+                File modulesFile = new File(jdkHome, "lib/modules");
+                if (javaBinary.isFile()) javaBinary.setExecutable(true, false);
+                if (javacBinary.isFile()) javacBinary.setExecutable(true, false);
+                if (!javaBinary.isFile() || !javacBinary.isFile() || !modulesFile.isFile()) {
+                    throw new IllegalStateException("Extracted JDK is incomplete. java=" +
+                            javaBinary.isFile() + " (" + javaBinary.getAbsolutePath() + ")" +
+                            ", javac=" + javacBinary.isFile() + " (" + javacBinary.getAbsolutePath() + ")" +
+                            ", lib/modules=" + modulesFile.isFile() +
+                            ". Extracted folder: " + jdkHome.getAbsolutePath());
+                }
+                if (!javaBinary.canExecute() || !javacBinary.canExecute()) {
+                    throw new IllegalStateException("JDK files exist but Android could not mark them executable. java executable=" +
+                            javaBinary.canExecute() + ", javac executable=" + javacBinary.canExecute());
+                }
                 success = true;
             } catch (Exception e) {
                 error = e.getClass().getSimpleName() + ": " + e.getMessage();
@@ -1065,6 +1257,35 @@ public class MainActivity extends Activity {
                 }
             });
         }, "Jdk21-Extractor").start();
+    }
+
+    private InputStream openBundledJdkArchive() throws Exception {
+        // Android Gradle may normalize the asset entry name from .tar.gz to .tar.
+        // The bytes remain the original gzip-compressed TAR, so extraction still
+        // uses GzipCompressorInputStream below for either asset name.
+        final String[] candidates = {"jdk21-android.tar.gz", "jdk21-android.tar"};
+        java.io.FileNotFoundException lastMissing = null;
+        for (String candidate : candidates) {
+            try {
+                return getAssets().open(candidate);
+            } catch (java.io.FileNotFoundException missing) {
+                lastMissing = missing;
+            }
+        }
+
+        String[] rootAssets = getAssets().list("");
+        StringBuilder found = new StringBuilder();
+        if (rootAssets != null) {
+            for (String asset : rootAssets) {
+                if (found.length() > 0) found.append(", ");
+                found.append(asset);
+            }
+        }
+        java.io.FileNotFoundException error = new java.io.FileNotFoundException(
+                "Bundled JDK archive not found. Tried assets/jdk21-android.tar.gz and " +
+                "assets/jdk21-android.tar. APK root assets: [" + found + "]");
+        if (lastMissing != null) error.initCause(lastMissing);
+        throw error;
     }
 
     private File findJdkHome(File folder, int depth) {
@@ -1265,7 +1486,7 @@ public class MainActivity extends Activity {
                     .setNegativeButton("Cancel", null).show();
             return;
         }
-        status.setText("Preparing offline Kotlin compiler…");
+        setIdeStatus("Preparing offline Kotlin compiler…");
         new Thread(() -> {
             boolean success = false;
             String report;
@@ -1276,11 +1497,13 @@ public class MainActivity extends Activity {
                 }
                 ensureJavaLibrariesInstalled();
                 String projectLibraryClasspath = getJavaLibrariesClasspath();
+                setIdeStatus("Checking Kotlin compiler…");
                 File compilerHome = ensureKotlinCompilerInstalled();
                 File compilerLib = new File(compilerHome, "lib");
                 String compilerClassPath = new File(compilerLib, "*").getAbsolutePath();
                 String extension = getCurrentExtension();
                 if ("kts".equals(extension)) {
+                    setIdeStatus("Compiling and running Kotlin script…");
                     String output = runJdkCommand(new File(jdkHome, "bin/java"), 120,
                             "-cp", compilerClassPath,
                             "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
@@ -1291,6 +1514,7 @@ public class MainActivity extends Activity {
                     report = "KOTLIN SCRIPT SUCCESSFUL\n\n" +
                             (output.isEmpty() ? "(Script finished with no output)" : output);
                 } else {
+                    setIdeStatus("Checking Kotlin project build…");
                     List<File> sources = new ArrayList<>();
                     collectKotlinFiles(workspace, sources);
                     if (sources.isEmpty()) throw new IllegalStateException("No .kt source files found in Workspace.");
@@ -1316,7 +1540,9 @@ public class MainActivity extends Activity {
                     command.add(compilerClassPath);
                     command.add("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler");
                     command.addAll(compilerArgs);
+                    setIdeStatus("Compiling Kotlin project…");
                     runJdkCommand(new File(jdkHome, "bin/java"), 180, command.toArray(new String[0]));
+                    setIdeStatus("Kotlin compilation successful • starting program…");
 
                     String sourceText = readText(currentFile);
                     java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
@@ -1326,13 +1552,12 @@ public class MainActivity extends Activity {
                     String fileName = currentFile.getName();
                     String className = fileName.substring(0, fileName.length() - 3) + "Kt";
                     String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
+                    setIdeStatus("Running Kotlin program…");
                     String output = runJdkCommand(new File(jdkHome, "bin/java"), 60,
                             "-Dfile.encoding=UTF-8", "-cp",
                             outputJar.getAbsolutePath() + File.pathSeparator + projectLibraryClasspath, mainClass);
                     success = true;
-                    report = "KOTLIN BUILD SUCCESSFUL\n" + sources.size() +
-                            " Kotlin source file(s) compiled.\n\nRUN: " + mainClass + "\n\n" +
-                            (output.isEmpty() ? "(Program finished with no output)" : output);
+                    report = cleanProgramOutput(output);
                 }
             } catch (Exception e) {
                 report = "KOTLIN BUILD / RUN FAILED\n\n" + e.getMessage();
@@ -1340,7 +1565,7 @@ public class MainActivity extends Activity {
             final boolean ok = success;
             final String result = report;
             runOnUiThread(() -> {
-                status.setText(ok ? "Kotlin program finished successfully" : "Kotlin compile/run failed");
+                setIdeStatus(ok ? "Kotlin run completed • success" : "Kotlin run failed • see error output");
                 showConsoleResult(ok, result);
             });
         }, "NiceKotlin-CompileRun").start();
@@ -1358,29 +1583,18 @@ public class MainActivity extends Activity {
     private void runCurrentProject() {
         if (!"java".equals(getCurrentExtension())) {
             String ext = getCurrentExtension();
-            if ("kt".equals(ext) || "kts".equals(ext)) {
-                runKotlinProject();
-                return;
-            }
-            if ("html".equals(ext) || "htm".equals(ext) || "css".equals(ext) || "js".equals(ext)) {
-                previewCurrentHtml();
-            } else {
-                status.setText("Run supports Java and HTML/CSS/JavaScript projects.");
-            }
-            return;
+            if ("kt".equals(ext) || "kts".equals(ext)) { runKotlinProject(); return; }
+            if ("html".equals(ext) || "htm".equals(ext) || "css".equals(ext) || "js".equals(ext)) { previewCurrentHtml(); return; }
+            status.setText("Run supports Java, Kotlin and HTML/CSS/JavaScript projects."); return;
         }
         if (!isJdkInstalled()) {
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle("OpenJDK 21 is not installed")
+            new android.app.AlertDialog.Builder(this).setTitle("OpenJDK 21 is not installed")
                     .setMessage("Tap Install JDK first. The full toolchain is bundled offline in this APK.")
-                    .setPositiveButton("Install JDK", (dialog, which) -> installBundledJdk())
-                    .setNegativeButton("Cancel", null).show();
-            return;
+                    .setPositiveButton("Install JDK", (dialog, which) -> installBundledJdk()).setNegativeButton("Cancel", null).show(); return;
         }
-        status.setText("Saving and compiling Java project…");
+        setIdeStatus("Saving Java source…");
         new Thread(() -> {
-            String report;
-            boolean success = false;
+            String report; boolean success = false;
             File classes = new File(getFilesDir(), "java-build/classes");
             try {
                 saveCurrentBeforeSwitch();
@@ -1388,64 +1602,161 @@ public class MainActivity extends Activity {
                 ensureJavaLibrariesInstalled();
                 File libraryDirectory = getJavaLibrariesDirectory();
                 String libraryClasspath = new File(libraryDirectory, "*").getAbsolutePath();
-                List<File> sources = new ArrayList<>();
-                collectJavaFiles(workspace, sources);
-                if (sources.isEmpty()) throw new IllegalStateException("No .java source files found in Workspace.");
-                deleteTree(classes);
-                if (!classes.mkdirs()) throw new IllegalStateException("Cannot create build output folder.");
-                List<String> compileArgs = new ArrayList<>();
-                compileArgs.add("-encoding");
-                compileArgs.add("UTF-8");
-                compileArgs.add("-classpath");
-                compileArgs.add(libraryClasspath);
-                compileArgs.add("-d");
-                compileArgs.add(classes.getAbsolutePath());
-                for (File source : sources) compileArgs.add(source.getAbsolutePath());
-                String compileOutput = runJdkCommand(new File(jdkHome, "bin/javac"), compileArgs.toArray(new String[0]));
+                if (currentFile == null || !currentFile.isFile() || !currentFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".java"))
+                    throw new IllegalStateException("Open a Java source file inside Workspace before running.");
                 String sourceText = readText(currentFile);
-                java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
-                        .compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;")
-                        .matcher(sourceText);
+                java.util.regex.Matcher packageMatcher = java.util.regex.Pattern.compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;").matcher(sourceText);
                 String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
-                java.util.regex.Matcher classMatcher = java.util.regex.Pattern
-                        .compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)")
-                        .matcher(sourceText);
-                String className = classMatcher.find() ? classMatcher.group(1) :
-                        currentFile.getName().substring(0, currentFile.getName().length() - 5);
+                java.util.regex.Matcher classMatcher = java.util.regex.Pattern.compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)").matcher(sourceText);
+                String className = classMatcher.find() ? classMatcher.group(1) : currentFile.getName().substring(0, currentFile.getName().length() - 5);
+                File compileSource = currentFile;
+                String expectedSourceName = className + ".java";
+                if (!currentFile.getName().equals(expectedSourceName)) {
+                    File staging = new File(getFilesDir(), "java-build/staged-source"); deleteTree(staging);
+                    if (!staging.mkdirs()) throw new IllegalStateException("Cannot create temporary Java source folder.");
+                    compileSource = new File(staging, expectedSourceName); writeText(compileSource, sourceText);
+                }
+                if (!classes.exists() && !classes.mkdirs()) throw new IllegalStateException("Cannot create build output folder.");
+                String compileClasspath = classes.getAbsolutePath() + File.pathSeparator + libraryClasspath;
+                String fingerprint = fingerprintProject(workspace, libraryDirectory);
+                File stamp = new File(getFilesDir(), "java-build/project.sha256");
+                File expectedClass = new File(classes, (packageName.isEmpty() ? "" : packageName.replace('.', '/') + "/") + className + ".class");
+                boolean needsCompile = !expectedClass.isFile() || !stamp.isFile() || !fingerprint.equals(readText(stamp).trim());
+                if (needsCompile) {
+                    setIdeStatus("Compiling Java…");
+                    List<String> args = new ArrayList<>();
+                    java.util.Collections.addAll(args, "-encoding", "UTF-8", "-classpath", compileClasspath,
+                            "-sourcepath", workspace.getAbsolutePath(), "-d", classes.getAbsolutePath(), compileSource.getAbsolutePath());
+                    runJdkCommand(new File(jdkHome, "bin/javac"), args.toArray(new String[0]));
+                    writeText(stamp, fingerprint);
+                    setIdeStatus("Compilation successful • starting program…");
+                } else setIdeStatus("Build is up to date • quick run…");
                 String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
+                setIdeStatus("Running Java program…");
                 String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-Dfile.encoding=UTF-8",
                         "-cp", classes.getAbsolutePath() + File.pathSeparator + libraryClasspath, mainClass);
-                success = true;
-                report = "BUILD SUCCESSFUL\n" + sources.size() + " Java source file(s) compiled.\n\n" +
-                        "RUN: " + mainClass + "\n\n" + (runOutput.isEmpty() ? "(Program finished with no output)" : runOutput);
-            } catch (Exception e) {
-                report = "BUILD / RUN FAILED\n\n" + e.getMessage();
-            }
-            final boolean ok = success;
-            final String result = report;
-            runOnUiThread(() -> {
-                status.setText(ok ? "Program finished successfully" : "Java compile/run failed");
-                showConsoleResult(ok, result);
-            });
+                success = true; report = cleanProgramOutput(runOutput);
+            } catch (Exception e) { report = "BUILD / RUN FAILED\\n\\n" + e.getMessage(); }
+            final boolean ok = success; final String result = report;
+            runOnUiThread(() -> { setIdeStatus(ok ? "Run completed • success" : "Run failed • see error output"); showConsoleResult(ok, result); });
         }, "NiceJava-CompileRun").start();
     }
 
+    private String fingerprintProject(File sourceRoot, File libraryDirectory) throws Exception {
+        List<File> inputs = new ArrayList<>();
+        collectFilesByExtension(sourceRoot, inputs, ".java");
+        File[] jars = libraryDirectory == null ? null : libraryDirectory.listFiles((dir, name) -> name.toLowerCase(java.util.Locale.ROOT).endsWith(".jar"));
+        if (jars != null) java.util.Collections.addAll(inputs, jars);
+        if (currentFile != null && currentFile.isFile() && !inputs.contains(currentFile)) inputs.add(currentFile);
+        java.util.Collections.sort(inputs, (a, b) -> a.getAbsolutePath().compareTo(b.getAbsolutePath()));
+        MessageDigest digest = MessageDigest.getInstance("SHA-256"); byte[] buffer = new byte[32768];
+        for (File file : inputs) {
+            digest.update(file.getAbsolutePath().getBytes(StandardCharsets.UTF_8));
+            try (InputStream in = new FileInputStream(file)) { int n; while ((n = in.read(buffer)) != -1) digest.update(buffer, 0, n); }
+        }
+        StringBuilder hex = new StringBuilder();
+        for (byte value : digest.digest()) hex.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
+        return hex.toString();
+    }
+
+    private void collectFilesByExtension(File folder, List<File> output, String extension) {
+        File[] children = folder == null ? null : folder.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child.isDirectory()) collectFilesByExtension(child, output, extension);
+            else if (child.getName().toLowerCase(java.util.Locale.ROOT).endsWith(extension)) output.add(child);
+        }
+    }
+
+    private void setIdeStatus(String message) {
+        runOnUiThread(() -> {
+            if (status != null) status.setText(message);
+            if (ideWebView != null) ideWebView.evaluateJavascript("window.setIdeStatus && window.setIdeStatus(" +
+                    org.json.JSONObject.quote(message) + ")", null);
+        });
+    }
+
+    private String cleanProgramOutput(String output) {
+        if (output == null || output.trim().isEmpty()) return "Program finished with no output.";
+        StringBuilder cleaned = new StringBuilder();
+        for (String line : output.split("\\r?\\n")) {
+            // Hide Android linker DT_RPATH warnings; these are not program output.
+            if (line.startsWith("WARNING: linker: Warning:")) continue;
+            if (cleaned.length() > 0) cleaned.append('\n');
+            cleaned.append(line);
+        }
+        return cleaned.toString().trim().isEmpty()
+                ? "Program finished with no output." : cleaned.toString().trim();
+    }
+
     private void showConsoleResult(boolean success, String output) {
+        android.app.Dialog dialog = new android.app.Dialog(this,
+                android.R.style.Theme_Material_NoActionBar_Fullscreen);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(0xFFF2F5FA);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(18), dp(12), dp(12), dp(12));
+        header.setBackgroundColor(0xFFE7EDF6);
+        TextView heading = new TextView(this);
+        heading.setText(success ? "OUTPUT" : "ERROR");
+        heading.setTextColor(success ? 0xFF65D6A3 : 0xFFFF8585);
+        heading.setTextSize(18);
+        heading.setTypeface(null, android.graphics.Typeface.BOLD);
+        header.addView(heading, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        Button close = new Button(this);
+        close.setText("CLOSE");
+        close.setAllCaps(false);
+        close.setOnClickListener(v -> dialog.dismiss());
+        header.addView(close);
+        page.addView(header, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(64)));
+
         TextView console = new TextView(this);
         console.setText(output);
         console.setTextIsSelectable(true);
-        console.setTextColor(0xFFE5E7EB);
-        console.setTextSize(13);
+        console.setTextColor(0xFF182235);
+        console.setTextSize(15);
         console.setTypeface(android.graphics.Typeface.MONOSPACE);
-        console.setPadding(dp(14), dp(12), dp(14), dp(12));
-        console.setBackgroundColor(0xFF0B1220);
-        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
-        scroll.addView(console);
-        new android.app.AlertDialog.Builder(this)
-                .setTitle(success ? "Run Console • Success" : "Run Console • Error")
-                .setView(scroll)
-                .setPositiveButton("Close", null)
-                .show();
+        console.setPadding(dp(18), dp(18), dp(18), dp(18));
+        console.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        // Preserve long output lines and allow independent horizontal scrolling.
+        console.setHorizontallyScrolling(true);
+        console.setSingleLine(false);
+
+        android.widget.HorizontalScrollView horizontalScroll =
+                new android.widget.HorizontalScrollView(this);
+        horizontalScroll.setFillViewport(false);
+        horizontalScroll.setHorizontalScrollBarEnabled(true);
+        horizontalScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        horizontalScroll.addView(console, new android.widget.HorizontalScrollView.LayoutParams(
+                android.widget.HorizontalScrollView.LayoutParams.WRAP_CONTENT,
+                android.widget.HorizontalScrollView.LayoutParams.WRAP_CONTENT));
+
+        // Outer ScrollView handles vertical movement; inner HorizontalScrollView
+        // handles long lines without wrapping or clipping.
+        android.widget.ScrollView verticalScroll = new android.widget.ScrollView(this);
+        verticalScroll.setFillViewport(true);
+        verticalScroll.setVerticalScrollBarEnabled(true);
+        verticalScroll.setBackgroundColor(0xFFFFFFFF);
+        verticalScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        verticalScroll.addView(horizontalScroll, new android.widget.ScrollView.LayoutParams(
+                android.widget.ScrollView.LayoutParams.MATCH_PARENT,
+                android.widget.ScrollView.LayoutParams.WRAP_CONTENT));
+        page.addView(verticalScroll, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        dialog.setContentView(page);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT);
+            dialog.getWindow().setStatusBarColor(0xFFF2F5FA);
+            dialog.getWindow().setNavigationBarColor(0xFFF2F5FA);
+        }
     }
 
     private void showEngineStatus() {
@@ -1490,6 +1801,12 @@ public class MainActivity extends Activity {
         }, "Jdk21-Runtime-Test").start();
     }
 
+    private boolean isPermissionDenied(java.io.IOException error) {
+        String message = error.getMessage();
+        return message != null && (message.contains("error=13") ||
+                message.toLowerCase(java.util.Locale.ROOT).contains("permission denied"));
+    }
+
     private String runJdkCommand(File executable, String... args) throws Exception {
         return runJdkCommand(executable, 30, args);
     }
@@ -1499,7 +1816,25 @@ public class MainActivity extends Activity {
             throw new IllegalStateException("JDK executable is missing or not executable: " + executable.getAbsolutePath());
         }
         List<String> command = new ArrayList<>();
-        command.add(executable.getAbsolutePath());
+        // Android app-private files may be mounted noexec. The build packages
+        // the actual ARM64 JDK launcher ELFs as native libraries so PackageManager
+        // extracts them into nativeLibraryDir, an executable installation path.
+        String toolName = executable.getName();
+        File nativeDir = new File(getApplicationInfo().nativeLibraryDir);
+        File packagedLauncher = null;
+        if ("javac".equals(toolName) || "javac.exe".equals(toolName)) {
+            packagedLauncher = new File(nativeDir, "libnicejavac.so");
+        } else if ("java".equals(toolName) || "java.exe".equals(toolName)) {
+            packagedLauncher = new File(nativeDir, "libnicejava.so");
+        }
+        if (packagedLauncher != null) {
+            if (!packagedLauncher.isFile() || !packagedLauncher.canExecute()) {
+                throw new IllegalStateException("Android JDK launcher is missing or not executable: " + packagedLauncher);
+            }
+            command.add(packagedLauncher.getAbsolutePath());
+        } else {
+            command.add(executable.getAbsolutePath());
+        }
         java.util.Collections.addAll(command, args);
         File outputFile = File.createTempFile("nicejava-process-", ".log", getCacheDir());
         Process process = null;
@@ -1513,8 +1848,31 @@ public class MainActivity extends Activity {
             env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
             String lib = new File(jdkHome, "lib").getAbsolutePath();
             String server = new File(jdkHome, "lib/server").getAbsolutePath();
-            env.put("LD_LIBRARY_PATH", server + ":" + lib + ":" + env.get("LD_LIBRARY_PATH"));
-            process = builder.start();
+            String existingLdPath = env.get("LD_LIBRARY_PATH");
+            env.put("LD_LIBRARY_PATH", server + ":" + lib +
+                    (existingLdPath == null || existingLdPath.isEmpty() ? "" : ":" + existingLdPath));
+            try {
+                process = builder.start();
+            } catch (java.io.IOException directError) {
+                // Android may deny execve() for binaries extracted into the app's
+                // writable files directory (EACCES / noexec policy). In that case,
+                // ask Android's system dynamic linker to load the same ARM64 ELF.
+                if (!isPermissionDenied(directError)) throw directError;
+                File linker = new File("/system/bin/linker64");
+                if (!linker.isFile()) throw directError;
+                List<String> linkerCommand = new ArrayList<>();
+                linkerCommand.add(linker.getAbsolutePath());
+                // Android's linker64 on some releases does not accept --library-path
+                // here; it interprets it as the ELF path. Pass the library search
+                // path only through LD_LIBRARY_PATH in the child environment.
+                linkerCommand.addAll(command);
+                ProcessBuilder fallback = new ProcessBuilder(linkerCommand);
+                fallback.directory(getFilesDir());
+                fallback.redirectErrorStream(true);
+                fallback.redirectOutput(outputFile);
+                fallback.environment().putAll(env);
+                process = fallback.start();
+            }
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroy();
@@ -1567,10 +1925,13 @@ public class MainActivity extends Activity {
     }
 
     private void updateFileLabel() {
-        if (fileLabel == null) return;
         String name = currentUri != null ? "External Java file" :
                 (currentFile == null ? "Untitled.java" : currentFile.getName());
-        fileLabel.setText("WORKSPACE  /  " + name);
+        if (fileLabel != null) fileLabel.setText("WORKSPACE  /  " + name);
+        if (ideWebView != null) {
+            String safe = org.json.JSONObject.quote(name);
+            ideWebView.evaluateJavascript("window.setFileName && window.setFileName(" + safe + ")", null);
+        }
         refreshTabs();
     }
 
