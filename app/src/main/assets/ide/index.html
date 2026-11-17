@@ -47,7 +47,8 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
 <script src="codemirror.min.js"></script><script>
 (function(){
  const status=document.getElementById('status'), source=document.getElementById('source');
- function report(s){status.textContent=s}\n window.setIdeStatus=function(s){report(s)}
+ function report(s){status.textContent=s}
+ window.setIdeStatus=function(s){report(s)}
  function nativeCall(method){try{if(!window.NativeIDE||typeof window.NativeIDE[method]!=='function'){report('Android bridge unavailable • reload app');return false}window.NativeIDE[method]();return true}catch(e){report('Action error: '+e.message);return false}}
  if(!window.CodeMirror){report('Editor library failed to load');return}
  CodeMirror.defineMode('nicejava',function(){return{startState:function(){return{comment:false,str:null}},token:function(s,st){if(s.eatSpace())return null;if(st.comment){if(s.skipTo('*/')){s.match('*/');st.comment=false}else s.skipToEnd();return 'comment'}if(st.str){while(!s.eol()){let c=s.next();if(c===st.str){st.str=null;break}if(c==='\\')s.next()}return 'string'}if(s.match('//')){s.skipToEnd();return 'comment'}if(s.match('/*')){st.comment=true;return 'comment'}if(s.match(/^"(?:[^"\\]|\\.)*"|^\x27(?:[^\x27\\]|\\.)*\x27/))return 'string';if(s.match(/^(?:package|import|public|private|protected|static|final|class|interface|enum|extends|implements|void|int|long|double|float|boolean|char|byte|short|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|throws|this|super|var|record)\b/))return 'keyword';if(s.match(/^(?:true|false|null)\b/))return 'atom';if(s.match(/^\d+(?:\.\d+)?[fFdDlL]?/))return 'number';if(s.match(/^[A-Z][\w$]*/))return 'type';if(s.match(/^[A-Za-z_$][\w$]*(?=\s*\()/))return 'def';s.next();return null}}});
