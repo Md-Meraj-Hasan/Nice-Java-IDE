@@ -108,8 +108,26 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         ideWebView.setBackgroundColor(0xFFF2F5FA);
-        ideWebView.setWebChromeClient(new android.webkit.WebChromeClient());
+        ideWebView.setWebChromeClient(new android.webkit.WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
+                android.util.Log.e("NiceJava-WebView",
+                        message.message() + " -- " + message.sourceId() + ":" + message.lineNumber());
+                return true;
+            }
+        });
         ideWebView.setWebViewClient(new android.webkit.WebViewClient() {
+            @Override
+            public void onReceivedError(WebView view, android.webkit.WebResourceRequest request,
+                                        android.webkit.WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request.isForMainFrame()) {
+                    String detail = "WebView load error: " + error.getDescription();
+                    android.util.Log.e("NiceJava-WebView", detail);
+                    if (status != null) status.setText(detail);
+                }
+            }
+
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
@@ -119,6 +137,12 @@ public class MainActivity extends Activity {
                 String name = currentFile == null ? "Main.java" : currentFile.getName();
                 view.evaluateJavascript("window.setFileName && window.setFileName(" +
                         org.json.JSONObject.quote(name) + ")", null);
+                view.evaluateJavascript(
+                        "(function(){var cm=!!window.CodeMirror;var ed=document.querySelector('.CodeMirror');" +
+                        "var msg=cm?(ed?'GUI READY • CodeMirror active':'GUI ERROR • CodeMirror did not initialize'):" +
+                        "'GUI ERROR • CodeMirror library missing';" +
+                        "if(window.setIdeStatus)window.setIdeStatus(msg);return msg;})()",
+                        result -> android.util.Log.i("NiceJava-WebView", "Startup check: " + result));
             }
         });
         ideWebView.addJavascriptInterface(new NiceIdeBridge(), "NativeIDE");
