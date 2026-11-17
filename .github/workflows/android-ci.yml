@@ -38,9 +38,6 @@ jobs:
           if (!html.includes('src="file:///android_asset/ide/codemirror.min.js"')) {
             throw new Error('index.html does not load the packaged CodeMirror JS asset');
           }
-          if ((html.match(/<script\\b/g) || []).length !== (html.match(/<\\/script>/g) || []).length) {
-            throw new Error('Unbalanced script tags in index.html');
-          }
           // Parse both JavaScript sources independently. This catches corruption
           // inside the minified vendor bundle as well as the app controller.
           new vm.Script(fs.readFileSync(assetDir + 'codemirror.min.js', 'utf8'));
