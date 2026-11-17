@@ -259,6 +259,19 @@ tasks.register('verifyPackagedJdkAsset') {
         if (!apk.isFile()) throw new GradleException("Debug APK was not produced: ${apk}")
         def zip = new java.util.zip.ZipFile(apk)
         try {
+            // Verify the complete offline WebView editor bundle is actually inside
+            // the APK, not merely present in the source tree.
+            ['assets/ide/index.html',
+             'assets/ide/codemirror.min.js',
+             'assets/ide/codemirror.min.css',
+             'assets/ide/material-darker.min.css'].each { assetName ->
+                def asset = zip.getEntry(assetName)
+                if (asset == null || asset.size < 100) {
+                    throw new GradleException("Missing or invalid WebView IDE asset in APK: ${assetName}")
+                }
+                logger.lifecycle("Verified packaged WebView IDE asset: ${assetName} (${asset.size} bytes)")
+            }
+
             // Android's asset packaging may normalize .tar.gz to .tar (noCompress).
             // Accept either exact name, but require exactly one full-size archive.
             def entries = zip.entries().toList().findAll {
