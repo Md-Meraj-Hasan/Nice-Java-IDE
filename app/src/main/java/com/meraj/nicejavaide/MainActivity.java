@@ -121,11 +121,12 @@ public class MainActivity extends Activity {
             public void onReceivedError(WebView view, android.webkit.WebResourceRequest request,
                                         android.webkit.WebResourceError error) {
                 super.onReceivedError(view, request, error);
-                if (request.isForMainFrame()) {
-                    String detail = "WebView load error: " + error.getDescription();
-                    android.util.Log.e("NiceJava-WebView", detail);
-                    if (status != null) status.setText(detail);
-                }
+                String detail = "WebView resource error: " + request.getUrl()
+                        + " | code=" + error.getErrorCode()
+                        + " | " + error.getDescription()
+                        + " | mainFrame=" + request.isForMainFrame();
+                android.util.Log.e("NiceJava-WebView", detail);
+                if (request.isForMainFrame() && status != null) status.setText(detail);
             }
 
             @Override
@@ -137,12 +138,15 @@ public class MainActivity extends Activity {
                 String name = currentFile == null ? "Main.java" : currentFile.getName();
                 view.evaluateJavascript("window.setFileName && window.setFileName(" +
                         org.json.JSONObject.quote(name) + ")", null);
-                view.evaluateJavascript(
-                        "(function(){var cm=!!window.CodeMirror;var ed=document.querySelector('.CodeMirror');" +
-                        "var msg=cm?(ed?'GUI READY • CodeMirror active':'GUI ERROR • CodeMirror did not initialize'):" +
-                        "'GUI ERROR • CodeMirror library missing';" +
-                        "if(window.setIdeStatus)window.setIdeStatus(msg);return msg;})()",
-                        result -> android.util.Log.i("NiceJava-WebView", "Startup check: " + result));
+                // Wait briefly for WebView to finish loading local JS assets, then
+                // report exact startup state without hiding the page's own error message.
+                view.postDelayed(() -> view.evaluateJavascript(
+                        "(function(){var cm=window.CodeMirror;var ed=document.querySelector('.CodeMirror');" +
+                        "var src=document.getElementById('source');var st=document.getElementById('status');" +
+                        "return JSON.stringify({url:location.href,readyState:document.readyState," +
+                        "codeMirror:typeof cm,fromTextArea:!!(cm&&cm.fromTextArea),editorNode:!!ed," +
+                        "sourceTextarea:!!src,status:st?st.textContent:'missing'});})()",
+                        result -> android.util.Log.i("NiceJava-WebView", "Startup diagnostics: " + result)), 500);
             }
         });
         ideWebView.addJavascriptInterface(new NiceIdeBridge(), "NativeIDE");
