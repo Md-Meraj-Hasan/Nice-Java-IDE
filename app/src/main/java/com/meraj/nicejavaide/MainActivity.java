@@ -38,6 +38,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -158,6 +159,11 @@ public class MainActivity extends Activity {
         }
 
         @android.webkit.JavascriptInterface
+        @android.webkit.JavascriptInterface
+        public void status(String message) {
+            runOnUiThread(() -> { if (status != null) status.setText(message == null ? "" : message); });
+        }
+
         public void run() {
             runOnUiThread(() -> {
                 try {
@@ -1441,7 +1447,7 @@ public class MainActivity extends Activity {
                     .setNegativeButton("Cancel", null).show();
             return;
         }
-        status.setText("Preparing offline Kotlin compiler…");
+        setIdeStatus("Preparing offline Kotlin compiler…");
         new Thread(() -> {
             boolean success = false;
             String report;
@@ -1452,11 +1458,13 @@ public class MainActivity extends Activity {
                 }
                 ensureJavaLibrariesInstalled();
                 String projectLibraryClasspath = getJavaLibrariesClasspath();
+                setIdeStatus("Checking Kotlin compiler…");
                 File compilerHome = ensureKotlinCompilerInstalled();
                 File compilerLib = new File(compilerHome, "lib");
                 String compilerClassPath = new File(compilerLib, "*").getAbsolutePath();
                 String extension = getCurrentExtension();
                 if ("kts".equals(extension)) {
+                    setIdeStatus("Compiling and running Kotlin script…");
                     String output = runJdkCommand(new File(jdkHome, "bin/java"), 120,
                             "-cp", compilerClassPath,
                             "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
@@ -1467,6 +1475,7 @@ public class MainActivity extends Activity {
                     report = "KOTLIN SCRIPT SUCCESSFUL\n\n" +
                             (output.isEmpty() ? "(Script finished with no output)" : output);
                 } else {
+                    setIdeStatus("Checking Kotlin project build…");
                     List<File> sources = new ArrayList<>();
                     collectKotlinFiles(workspace, sources);
                     if (sources.isEmpty()) throw new IllegalStateException("No .kt source files found in Workspace.");
@@ -1492,7 +1501,9 @@ public class MainActivity extends Activity {
                     command.add(compilerClassPath);
                     command.add("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler");
                     command.addAll(compilerArgs);
+                    setIdeStatus("Compiling Kotlin project…");
                     runJdkCommand(new File(jdkHome, "bin/java"), 180, command.toArray(new String[0]));
+                    setIdeStatus("Kotlin compilation successful • starting program…");
 
                     String sourceText = readText(currentFile);
                     java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
@@ -1502,6 +1513,7 @@ public class MainActivity extends Activity {
                     String fileName = currentFile.getName();
                     String className = fileName.substring(0, fileName.length() - 3) + "Kt";
                     String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
+                    setIdeStatus("Running Kotlin program…");
                     String output = runJdkCommand(new File(jdkHome, "bin/java"), 60,
                             "-Dfile.encoding=UTF-8", "-cp",
                             outputJar.getAbsolutePath() + File.pathSeparator + projectLibraryClasspath, mainClass);
@@ -1514,7 +1526,7 @@ public class MainActivity extends Activity {
             final boolean ok = success;
             final String result = report;
             runOnUiThread(() -> {
-                status.setText(ok ? "Kotlin program finished successfully" : "Kotlin compile/run failed");
+                setIdeStatus(ok ? "Kotlin run completed • success" : "Kotlin run failed • see error output");
                 showConsoleResult(ok, result);
             });
         }, "NiceKotlin-CompileRun").start();
@@ -1532,29 +1544,18 @@ public class MainActivity extends Activity {
     private void runCurrentProject() {
         if (!"java".equals(getCurrentExtension())) {
             String ext = getCurrentExtension();
-            if ("kt".equals(ext) || "kts".equals(ext)) {
-                runKotlinProject();
-                return;
-            }
-            if ("html".equals(ext) || "htm".equals(ext) || "css".equals(ext) || "js".equals(ext)) {
-                previewCurrentHtml();
-            } else {
-                status.setText("Run supports Java and HTML/CSS/JavaScript projects.");
-            }
-            return;
+            if ("kt".equals(ext) || "kts".equals(ext)) { runKotlinProject(); return; }
+            if ("html".equals(ext) || "htm".equals(ext) || "css".equals(ext) || "js".equals(ext)) { previewCurrentHtml(); return; }
+            status.setText("Run supports Java, Kotlin and HTML/CSS/JavaScript projects."); return;
         }
         if (!isJdkInstalled()) {
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle("OpenJDK 21 is not installed")
+            new android.app.AlertDialog.Builder(this).setTitle("OpenJDK 21 is not installed")
                     .setMessage("Tap Install JDK first. The full toolchain is bundled offline in this APK.")
-                    .setPositiveButton("Install JDK", (dialog, which) -> installBundledJdk())
-                    .setNegativeButton("Cancel", null).show();
-            return;
+                    .setPositiveButton("Install JDK", (dialog, which) -> installBundledJdk()).setNegativeButton("Cancel", null).show(); return;
         }
-        status.setText("Saving and compiling Java project…");
+        setIdeStatus("Saving Java source…");
         new Thread(() -> {
-            String report;
-            boolean success = false;
+            String report; boolean success = false;
             File classes = new File(getFilesDir(), "java-build/classes");
             try {
                 saveCurrentBeforeSwitch();
@@ -1562,68 +1563,78 @@ public class MainActivity extends Activity {
                 ensureJavaLibrariesInstalled();
                 File libraryDirectory = getJavaLibrariesDirectory();
                 String libraryClasspath = new File(libraryDirectory, "*").getAbsolutePath();
-                if (currentFile == null || !currentFile.isFile() ||
-                        !currentFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".java")) {
+                if (currentFile == null || !currentFile.isFile() || !currentFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".java"))
                     throw new IllegalStateException("Open a Java source file inside Workspace before running.");
-                }
-
                 String sourceText = readText(currentFile);
-                java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
-                        .compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;")
-                        .matcher(sourceText);
+                java.util.regex.Matcher packageMatcher = java.util.regex.Pattern.compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;").matcher(sourceText);
                 String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
-                java.util.regex.Matcher classMatcher = java.util.regex.Pattern
-                        .compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)")
-                        .matcher(sourceText);
-                String className = classMatcher.find() ? classMatcher.group(1) :
-                        currentFile.getName().substring(0, currentFile.getName().length() - 5);
-
-                // Java requires a public top-level type to match its .java filename.
-                // Compile the active editor file from a temporary correctly named copy,
-                // leaving the user's original file and workspace untouched.
+                java.util.regex.Matcher classMatcher = java.util.regex.Pattern.compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)").matcher(sourceText);
+                String className = classMatcher.find() ? classMatcher.group(1) : currentFile.getName().substring(0, currentFile.getName().length() - 5);
                 File compileSource = currentFile;
                 String expectedSourceName = className + ".java";
                 if (!currentFile.getName().equals(expectedSourceName)) {
-                    File staging = new File(getFilesDir(), "java-build/staged-source");
-                    deleteTree(staging);
+                    File staging = new File(getFilesDir(), "java-build/staged-source"); deleteTree(staging);
                     if (!staging.mkdirs()) throw new IllegalStateException("Cannot create temporary Java source folder.");
-                    compileSource = new File(staging, expectedSourceName);
-                    writeText(compileSource, sourceText);
+                    compileSource = new File(staging, expectedSourceName); writeText(compileSource, sourceText);
                 }
-
-                // Keep previous class files and compile only the active source.
-                // javac resolves project dependencies through -sourcepath and
-                // recompiles source dependencies when their class files are stale.
-                if (!classes.exists() && !classes.mkdirs()) {
-                    throw new IllegalStateException("Cannot create build output folder.");
-                }
+                if (!classes.exists() && !classes.mkdirs()) throw new IllegalStateException("Cannot create build output folder.");
                 String compileClasspath = classes.getAbsolutePath() + File.pathSeparator + libraryClasspath;
-                List<String> compileArgs = new ArrayList<>();
-                compileArgs.add("-encoding");
-                compileArgs.add("UTF-8");
-                compileArgs.add("-classpath");
-                compileArgs.add(compileClasspath);
-                compileArgs.add("-sourcepath");
-                compileArgs.add(workspace.getAbsolutePath());
-                compileArgs.add("-d");
-                compileArgs.add(classes.getAbsolutePath());
-                compileArgs.add(compileSource.getAbsolutePath());
-                String compileOutput = runJdkCommand(new File(jdkHome, "bin/javac"), compileArgs.toArray(new String[0]));
+                String fingerprint = fingerprintProject(workspace, libraryDirectory);
+                File stamp = new File(getFilesDir(), "java-build/project.sha256");
+                File expectedClass = new File(classes, (packageName.isEmpty() ? "" : packageName.replace('.', '/') + "/") + className + ".class");
+                boolean needsCompile = !expectedClass.isFile() || !stamp.isFile() || !fingerprint.equals(readText(stamp).trim());
+                if (needsCompile) {
+                    setIdeStatus("Compiling Java…");
+                    List<String> args = new ArrayList<>();
+                    java.util.Collections.addAll(args, "-encoding", "UTF-8", "-classpath", compileClasspath,
+                            "-sourcepath", workspace.getAbsolutePath(), "-d", classes.getAbsolutePath(), compileSource.getAbsolutePath());
+                    runJdkCommand(new File(jdkHome, "bin/javac"), args.toArray(new String[0]));
+                    writeText(stamp, fingerprint);
+                    setIdeStatus("Compilation successful • starting program…");
+                } else setIdeStatus("Build is up to date • quick run…");
                 String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
+                setIdeStatus("Running Java program…");
                 String runOutput = runJdkCommand(new File(jdkHome, "bin/java"), "-Dfile.encoding=UTF-8",
                         "-cp", classes.getAbsolutePath() + File.pathSeparator + libraryClasspath, mainClass);
-                success = true;
-                report = cleanProgramOutput(runOutput);
-            } catch (Exception e) {
-                report = "BUILD / RUN FAILED\n\n" + e.getMessage();
-            }
-            final boolean ok = success;
-            final String result = report;
-            runOnUiThread(() -> {
-                status.setText(ok ? "Program finished successfully" : "Java compile/run failed");
-                showConsoleResult(ok, result);
-            });
+                success = true; report = cleanProgramOutput(runOutput);
+            } catch (Exception e) { report = "BUILD / RUN FAILED\\n\\n" + e.getMessage(); }
+            final boolean ok = success; final String result = report;
+            runOnUiThread(() -> { setIdeStatus(ok ? "Run completed • success" : "Run failed • see error output"); showConsoleResult(ok, result); });
         }, "NiceJava-CompileRun").start();
+    }
+
+    private String fingerprintProject(File sourceRoot, File libraryDirectory) throws Exception {
+        List<File> inputs = new ArrayList<>();
+        collectFilesByExtension(sourceRoot, inputs, ".java");
+        File[] jars = libraryDirectory == null ? null : libraryDirectory.listFiles((dir, name) -> name.toLowerCase(java.util.Locale.ROOT).endsWith(".jar"));
+        if (jars != null) java.util.Collections.addAll(inputs, jars);
+        if (currentFile != null && currentFile.isFile() && !inputs.contains(currentFile)) inputs.add(currentFile);
+        java.util.Collections.sort(inputs, (a, b) -> a.getAbsolutePath().compareTo(b.getAbsolutePath()));
+        MessageDigest digest = MessageDigest.getInstance("SHA-256"); byte[] buffer = new byte[32768];
+        for (File file : inputs) {
+            digest.update(file.getAbsolutePath().getBytes(StandardCharsets.UTF_8));
+            try (InputStream in = new FileInputStream(file)) { int n; while ((n = in.read(buffer)) != -1) digest.update(buffer, 0, n); }
+        }
+        StringBuilder hex = new StringBuilder();
+        for (byte value : digest.digest()) hex.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
+        return hex.toString();
+    }
+
+    private void collectFilesByExtension(File folder, List<File> output, String extension) {
+        File[] children = folder == null ? null : folder.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child.isDirectory()) collectFilesByExtension(child, output, extension);
+            else if (child.getName().toLowerCase(java.util.Locale.ROOT).endsWith(extension)) output.add(child);
+        }
+    }
+
+    private void setIdeStatus(String message) {
+        runOnUiThread(() -> {
+            if (status != null) status.setText(message);
+            if (ideWebView != null) ideWebView.evaluateJavascript("window.setIdeStatus && window.setIdeStatus(" +
+                    org.json.JSONObject.quote(message) + ")", null);
+        });
     }
 
     private String cleanProgramOutput(String output) {
