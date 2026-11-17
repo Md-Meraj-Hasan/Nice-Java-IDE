@@ -440,15 +440,27 @@ public class MainActivity extends Activity {
                     try {
                         File executable = new File(new File(jdkHome, "bin"), toolName);
                         if (!executable.exists()) executable = new File(new File(jdkHome, "bin"), toolName + ".exe");
-                        if ("java".equals(toolName) || "javac".equals(toolName)) {
-                            File packaged = new File(getApplicationInfo().nativeLibraryDir,
-                                    "java".equals(toolName) ? "libnicejava.so" : "libnicejavac.so");
-                            if (packaged.isFile() && packaged.canExecute()) executable = packaged;
-                        }
-                        if (!executable.exists()) throw new java.io.IOException(toolName + " is not available in this JDK build.");
                         List<String> command = new ArrayList<>();
-                        command.add(executable.getAbsolutePath());
                         String raw = argsInput.getText().toString().trim();
+                        if ("jar".equals(toolName)) {
+                            // The extracted JDK lives in app-private storage, which may be mounted noexec.
+                            // Run the JAR tool as a JDK module through the packaged, executable Java launcher.
+                            File javaLauncher = new File(getApplicationInfo().nativeLibraryDir, "libnicejava.so");
+                            if (!javaLauncher.isFile() || !javaLauncher.canExecute()) {
+                                throw new java.io.IOException("Executable Android Java launcher is missing: " + javaLauncher);
+                            }
+                            command.add(javaLauncher.getAbsolutePath());
+                            command.add("-m");
+                            command.add("jdk.jartool/sun.tools.jar.Main");
+                        } else {
+                            if ("java".equals(toolName) || "javac".equals(toolName)) {
+                                File packaged = new File(getApplicationInfo().nativeLibraryDir,
+                                        "java".equals(toolName) ? "libnicejava.so" : "libnicejavac.so");
+                                if (packaged.isFile() && packaged.canExecute()) executable = packaged;
+                            }
+                            if (!executable.exists()) throw new java.io.IOException(toolName + " is not available in this JDK build.");
+                            command.add(executable.getAbsolutePath());
+                        }
                         if (!raw.isEmpty()) {
                             // Deliberately simple whitespace tokenization; quoted shell expressions are not evaluated.
                             for (String part : raw.split("\\s+")) command.add(part);
