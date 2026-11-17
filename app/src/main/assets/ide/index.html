@@ -33,7 +33,7 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
  <section class="group"><button type="button" class="group-title section-toggle" aria-expanded="false">Project ▾</button><button data-action="files">Files</button><button data-action="folders">Folders</button><button data-action="kotlin">Kotlin</button></section>
  <section class="group"><button type="button" id="toolsBtn" class="tools-menu-btn" aria-label="Open Tools menu">Tools ▾</button><button type="button" class="group-title section-toggle" aria-expanded="false">Runtime ▾</button><button data-action="jdk">JDK</button><button data-action="libs">Libraries</button></section>
 </nav>
-<div class="filebar"><span class="file-dot"></span><span class="file-name" id="fileName">Main.java</span><span id="fileType" style="margin-left:auto;color:#8094b0">JAVA</span></div>
+<div class="filebar"><span class="file-dot"></span><span class="file-name" id="fileName">Main.java</span><select id="languageSelect" aria-label="Editor language" style="margin-left:auto;max-width:145px;padding:5px 7px;border:1px solid #8da4c2;border-radius:6px;background:#f8fbff;color:#24344d;font-size:12px;font-weight:700"><option value="java">Java</option><option value="html">HTML</option><option value="css">CSS</option><option value="js">JavaScript</option></select><span id="fileType" style="color:#8094b0;margin-left:7px">JAVA</span></div>
 <div class="editor-wrap" id="editorWrap"><textarea id="source"></textarea></div>
 <div id="fixed-toolbar" aria-label="NiceCoding coding keys">
  <div class="symbol-row">
@@ -74,6 +74,23 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
   editor.setOption('mode',modes[ext]||'text/plain');
   editor.refresh();
  };
+  const languageSelect=document.getElementById('languageSelect');
+ const languageInfo={
+  java:{mode:'nicejava',label:'JAVA',name:'Main.java',sample:'public class Main {\\n    public static void main(String[] args) {\\n        System.out.println("Hello from Nice Java IDE!");\\n    }\\n}\\n'},
+  html:{mode:'nicehtml',label:'HTML',name:'index.html',sample:'<!DOCTYPE html>\\n<html>\\n<head>\\n  <meta charset="UTF-8">\\n  <title>My Page</title>\\n  <link rel="stylesheet" href="style.css">\\n</head>\\n<body>\\n  <h1>Hello World</h1>\\n  <script src="script.js"></script>\\n</body>\\n</html>\\n'},
+  css:{mode:'nicecss',label:'CSS',name:'style.css',sample:'body {\\n  margin: 0;\\n  font-family: Arial, sans-serif;\\n}\\n'},
+  js:{mode:'nicejs',label:'JAVASCRIPT',name:'script.js',sample:'function greet() {\\n  console.log("Hello World");\\n}\\n\\ngreet();\\n'}
+ };
+ languageSelect.addEventListener('change',function(){
+  const info=languageInfo[this.value];
+  editor.setOption('mode',info.mode);
+  document.getElementById('fileName').textContent=info.name;
+  document.getElementById('fileType').textContent=info.label;
+  editor.setValue(info.sample);
+  editor.refresh();
+  editor.focus();
+  report(info.label+' editor selected • use Save As and keep '+info.name);
+ });
  editor.on('change',sync);
  editor.on('focus',function(){document.body.classList.add('editor-focused')});
  editor.on('blur',function(){setTimeout(function(){if(!document.activeElement||!document.activeElement.closest('#fixed-toolbar'))document.body.classList.remove('editor-focused')},180)});
