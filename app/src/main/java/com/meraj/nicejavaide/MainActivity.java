@@ -159,7 +159,6 @@ public class MainActivity extends Activity {
         }
 
         @android.webkit.JavascriptInterface
-        @android.webkit.JavascriptInterface
         public void status(String message) {
             runOnUiThread(() -> { if (status != null) status.setText(message == null ? "" : message); });
         }
