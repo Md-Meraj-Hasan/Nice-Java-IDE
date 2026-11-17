@@ -361,6 +361,9 @@ public class MainActivity extends Activity {
         };
         android.app.AlertDialog toolsDialog = new android.app.AlertDialog.Builder(this)
                 .setTitle("🧰  Nice Java Tools")
+                // Populate the dialog's ListView before customizing it below.
+                // Without setItems(), getListView() is null and Tools crashes.
+                .setItems(items, null)
                 .setNegativeButton("Close", null)
                 .create();
         toolsDialog.setOnShowListener(dialog -> {
