@@ -33,14 +33,14 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
  <section class="group"><button type="button" class="group-title section-toggle" aria-expanded="false">Project ▾</button><button data-action="files">Files</button><button data-action="folders">Folders</button><button data-action="kotlin">Kotlin</button></section>
  <section class="group"><button type="button" id="toolsBtn" class="tools-menu-btn" aria-label="Open Tools menu">Tools ▾</button><button type="button" class="group-title section-toggle" aria-expanded="false">Runtime ▾</button><button data-action="jdk">JDK</button><button data-action="libs">Libraries</button></section>
 </nav>
-<div class="filebar"><span class="file-dot"></span><span class="file-name" id="fileName">Main.java</span><span style="margin-left:auto;color:#8094b0">JAVA</span></div>
+<div class="filebar"><span class="file-dot"></span><span class="file-name" id="fileName">Main.java</span><span id="fileType" style="margin-left:auto;color:#8094b0">JAVA</span></div>
 <div class="editor-wrap" id="editorWrap"><textarea id="source"></textarea></div>
 <div id="fixed-toolbar" aria-label="NiceCoding coding keys">
  <div class="symbol-row">
   <button class="symbol-btn prime-btn" data-key="tab">TAB</button><button class="symbol-btn prime-btn" data-insert="=">=</button><button class="symbol-btn nav-btn" data-move="up">▲</button><button class="symbol-btn" data-insert="_">_</button><button class="symbol-btn" data-insert="''">' '</button><button class="symbol-btn" data-pair="&quot;&quot;">" "</button><button class="symbol-btn" data-pair="()">()</button><button class="symbol-btn" data-pair="[]">[]</button><button class="symbol-btn" data-pair="{}">{}</button><button class="symbol-btn" data-insert=":">:</button>
  </div>
  <div class="symbol-row">
-  <button class="symbol-btn nav-btn" data-move="left">◀</button><button class="symbol-btn nav-btn" data-move="right">▶</button><button class="symbol-btn nav-btn" data-move="down">▼</button><button class="symbol-btn" data-insert="&lt;">&lt;</button><button class="symbol-btn" data-insert="&gt;">&gt;</button><button class="symbol-btn" data-insert="+">+</button><button class="symbol-btn" data-insert="-">-</button><button class="symbol-btn" data-insert="*">*</button><button class="symbol-btn" data-insert="/">/</button><button class="symbol-btn" data-insert=".">.</button>
+  <button class="symbol-btn nav-btn" data-move="left">◀</button><button class="symbol-btn nav-btn" data-move="right">▶</button><button class="symbol-btn nav-btn" data-move="down">▼</button><button class="symbol-btn" data-insert="&lt;">&lt;</button><button class="symbol-btn" data-insert="&gt;">&gt;</button><button class="symbol-btn" data-insert="+">+</button><button class="symbol-btn" data-insert="-">-</button><button class="symbol-btn" data-insert="*">*</button><button class="symbol-btn" data-insert="/">/</button><button class="symbol-btn" data-insert=";">;</button>
  </div>
 </div>
 <footer class="status" id="status">Ready • Offline editor</footer></main>
@@ -51,6 +51,9 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
  function nativeCall(method){try{if(!window.NativeIDE||typeof window.NativeIDE[method]!=='function'){report('Android bridge unavailable • reload app');return false}window.NativeIDE[method]();return true}catch(e){report('Action error: '+e.message);return false}}
  if(!window.CodeMirror){report('Editor library failed to load');return}
  CodeMirror.defineMode('nicejava',function(){return{startState:function(){return{comment:false,str:null}},token:function(s,st){if(s.eatSpace())return null;if(st.comment){if(s.skipTo('*/')){s.match('*/');st.comment=false}else s.skipToEnd();return 'comment'}if(st.str){while(!s.eol()){let c=s.next();if(c===st.str){st.str=null;break}if(c==='\\')s.next()}return 'string'}if(s.match('//')){s.skipToEnd();return 'comment'}if(s.match('/*')){st.comment=true;return 'comment'}if(s.match(/^"(?:[^"\\]|\\.)*"|^\x27(?:[^\x27\\]|\\.)*\x27/))return 'string';if(s.match(/^(?:package|import|public|private|protected|static|final|class|interface|enum|extends|implements|void|int|long|double|float|boolean|char|byte|short|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|throws|this|super|var|record)\b/))return 'keyword';if(s.match(/^(?:true|false|null)\b/))return 'atom';if(s.match(/^\d+(?:\.\d+)?[fFdDlL]?/))return 'number';if(s.match(/^[A-Z][\w$]*/))return 'type';if(s.match(/^[A-Za-z_$][\w$]*(?=\s*\()/))return 'def';s.next();return null}}});
+ CodeMirror.defineMode('nicejs',function(){return{startState:function(){return{block:false}},token:function(s,st){if(s.eatSpace())return null;if(st.block){if(s.skipTo('*/')){s.match('*/');st.block=false}else s.skipToEnd();return 'comment'}if(s.match('//')){s.skipToEnd();return 'comment'}if(s.match('/*')){st.block=true;return 'comment'}if(s.match(/^\x27(?:[^\x27\\]|\\.)*\x27|^"(?:[^"\\]|\\.)*"|^\x60(?:[^\x60\\]|\\.)*\x60/))return 'string';if(s.match(/^(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|new|class|extends|this|async|await|try|catch|throw|import|export|from|default|true|false|null|undefined)\b/))return 'keyword';if(s.match(/^\d+(?:\.\d+)?/))return 'number';if(s.match(/^[A-Z][\w$]*/))return 'type';if(s.match(/^[A-Za-z_$][\w$]*(?=\s*\()/))return 'def';s.next();return null}}});
+ CodeMirror.defineMode('nicecss',function(){return{startState:function(){return{block:false}},token:function(s,st){if(s.eatSpace())return null;if(st.block){if(s.skipTo('*/')){s.match('*/');st.block=false}else s.skipToEnd();return 'comment'}if(s.match('/*')){st.block=true;return 'comment'}if(s.match(/^"(?:[^"\\]|\\.)*"|^\x27(?:[^\x27\\]|\\.)*\x27/))return 'string';if(s.match(/^[.#]?[A-Za-z_-][\w-]*(?=\s*\{)/))return 'tag';if(s.match(/^[A-Za-z-]+(?=\s*:)/))return 'property';if(s.match(/^#[0-9a-fA-F]{3,8}\b/))return 'number';if(s.match(/^\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw)?/))return 'number';s.next();return null}}});
+ CodeMirror.defineMode('nicehtml',function(){return{startState:function(){return{comment:false,tag:false}},token:function(s,st){if(s.eatSpace())return null;if(st.comment){if(s.skipTo('-->')){s.match('-->');st.comment=false}else s.skipToEnd();return 'comment'}if(s.match('<!--')){st.comment=true;return 'comment'}if(s.match(/^<![^>]*>/))return 'meta';if(s.match(/^<\/?[A-Za-z][\w:-]*/)){st.tag=true;return 'tag'}if(st.tag&&s.match(/^>/)){st.tag=false;return 'tag'}if(st.tag&&s.match(/^\/>/)){st.tag=false;return 'tag'}if(st.tag&&s.match(/^[A-Za-z_:][\w:.-]*/))return 'attribute';if(s.match(/^"(?:[^"\\]|\\.)*"|^\x27(?:[^\x27\\]|\\.)*\x27/))return 'string';s.next();return null}}});
  let editor;
  try{
   editor=CodeMirror.fromTextArea(source,{mode:'nicejava',theme:'default',lineNumbers:true,indentUnit:4,tabSize:4,indentWithTabs:false,lineWrapping:false,viewportMargin:30});
@@ -61,7 +64,16 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
  }catch(e){report('Editor startup error: '+e.message);return}
  function sync(){try{if(window.NativeIDE&&typeof NativeIDE.changed==='function')NativeIDE.changed(editor.getValue())}catch(e){report('Sync error: '+e.message)}}
  window.setEditorCode=function(v){editor.setValue(v||'');editor.refresh()};
- window.setFileName=function(v){document.getElementById('fileName').textContent=v||'Main.java'};
+ window.setFileName=function(v){
+  const name=v||'Main.java';
+  document.getElementById('fileName').textContent=name;
+  const ext=name.toLowerCase().split('.').pop();
+  const modes={java:'nicejava',kt:'nicejava',kts:'nicejava',js:'nicejs',mjs:'nicejs',cjs:'nicejs',css:'nicecss',html:'nicehtml',htm:'nicehtml'};
+  const labels={java:'JAVA',kt:'KOTLIN',kts:'KOTLIN SCRIPT',js:'JAVASCRIPT',mjs:'JAVASCRIPT',cjs:'JAVASCRIPT',css:'CSS',html:'HTML',htm:'HTML',json:'JSON',xml:'XML',md:'MARKDOWN',txt:'TEXT',py:'PYTHON'};
+  document.getElementById('fileType').textContent=labels[ext]||ext.toUpperCase();
+  editor.setOption('mode',modes[ext]||'text/plain');
+  editor.refresh();
+ };
  editor.on('change',sync);
  editor.on('focus',function(){document.body.classList.add('editor-focused')});
  editor.on('blur',function(){setTimeout(function(){if(!document.activeElement||!document.activeElement.closest('#fixed-toolbar'))document.body.classList.remove('editor-focused')},180)});
