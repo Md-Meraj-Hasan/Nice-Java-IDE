@@ -28,14 +28,26 @@ jobs:
           const fs = require('fs');
           const vm = require('vm');
           const html = fs.readFileSync('app/src/main/assets/ide/index.html', 'utf8');
+          const assetDir = 'app/src/main/assets/ide/';
           for (const asset of ['codemirror.min.js', 'codemirror.min.css', 'material-darker.min.css']) {
-            if (!fs.existsSync('app/src/main/assets/ide/' + asset)) throw new Error('Missing IDE asset: ' + asset);
+            const assetPath = assetDir + asset;
+            if (!fs.existsSync(assetPath) || fs.statSync(assetPath).size < 100) {
+              throw new Error('Missing or invalid IDE asset: ' + assetPath);
+            }
           }
-          const start = html.lastIndexOf('<script>');
-          const end = html.indexOf('</script>', start);
-          if (start < 0 || end < 0) throw new Error('No inline IDE controller script found');
-          new vm.Script(html.slice(start + 8, end));
-          console.log('CodeMirror assets and inline controller syntax verified');
+          if (!html.includes('src="file:///android_asset/ide/codemirror.min.js"')) {
+            throw new Error('index.html does not load the packaged CodeMirror JS asset');
+          }
+          if ((html.match(/<script\\b/g) || []).length !== (html.match(/<\\/script>/g) || []).length) {
+            throw new Error('Unbalanced script tags in index.html');
+          }
+          // Parse both JavaScript sources independently. This catches corruption
+          // inside the minified vendor bundle as well as the app controller.
+          new vm.Script(fs.readFileSync(assetDir + 'codemirror.min.js', 'utf8'));
+          const scripts = [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];
+          if (scripts.length !== 1) throw new Error('Expected exactly one inline IDE controller script');
+          new vm.Script(scripts[0][1]);
+          console.log('CodeMirror JS, CSS references, script tags and IDE controller syntax verified');
           NODE
       - name: Set up JDK 17
         uses: actions/setup-java@v6
