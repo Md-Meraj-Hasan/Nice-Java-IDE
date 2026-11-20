@@ -57,7 +57,9 @@ dependencies {
 }
 
 def javaLibrariesOutput = layout.buildDirectory.dir('generated/java-libs')
+def offlineAssetsOutput = layout.buildDirectory.dir('generated/offline-assets')
 android.sourceSets.main.assets.srcDir(javaLibrariesOutput)
+android.sourceSets.main.assets.srcDir(offlineAssetsOutput)
 
 tasks.register('bundleJavaProjectLibraries', Sync) {
     from configurations.javaProjectLibraries
@@ -65,7 +67,7 @@ tasks.register('bundleJavaProjectLibraries', Sync) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-def kotlinCompilerArchive = layout.projectDirectory.file('src/main/assets/kotlin-compiler-2.4.21.zip')
+def kotlinCompilerArchive = offlineAssetsOutput.get().file('kotlin-compiler-2.4.21.zip')
 def kotlinCompilerUrl = 'https://github.com/JetBrains/kotlin/releases/download/v2.4.21/kotlin-compiler-2.4.21.zip'
 def kotlinCompilerSha256 = '7cc140e76daf416a0424a5557f99afd7ca89ebd463ea1101261e3e01c33e75cd'
 
@@ -115,7 +117,7 @@ tasks.register('downloadKotlinCompiler') {
     }
 }
 
-def jdkArchive = layout.projectDirectory.file('src/main/assets/jdk21-android.tar.gz')
+def jdkArchive = offlineAssetsOutput.get().file('jdk21-android.tar.gz')
 def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.4/jdk21-android.tar.gz'
 def jdkSha256 = '9e38b66557db40481d90a6f5cfbce05180414e3131a6b77c4dea1304fcba6e9b'
 
@@ -169,6 +171,17 @@ tasks.named('preBuild').configure {
     dependsOn tasks.named('downloadOpenJdk21')
     dependsOn tasks.named('downloadKotlinCompiler')
     dependsOn tasks.named('bundleJavaProjectLibraries')
+}
+
+// Asset generation can run before preBuild. Make the downloads explicit inputs
+// of the Android asset-generation/merge tasks so they cannot be marked UP-TO-DATE
+// before the offline archives exist.
+tasks.configureEach { task ->
+    if (task.name == 'generateDebugAssets' || task.name == 'mergeDebugAssets' || task.name == 'compressDebugAssets') {
+        task.dependsOn tasks.named('downloadOpenJdk21')
+        task.dependsOn tasks.named('downloadKotlinCompiler')
+        task.dependsOn tasks.named('bundleJavaProjectLibraries')
+    }
 }
 
 
