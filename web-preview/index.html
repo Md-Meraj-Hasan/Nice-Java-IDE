@@ -1,47 +1,231 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nice Java IDE — Web Preview</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Nice Java IDE — Web Preview</title>
+<link rel="stylesheet" href="vendor/codemirror/lib/codemirror.css">
+<link rel="stylesheet" href="vendor/codemirror/theme/material-darker.css">
 <style>
-:root{color-scheme:dark;font:14px system-ui;background:#0b1120;color:#e5e7eb}*{box-sizing:border-box}body{margin:0}.top{padding:14px 18px;background:#111827;border-bottom:1px solid #263247;display:flex;justify-content:space-between;align-items:center;gap:12px}.top strong{font-size:19px}.tag{font-size:11px;color:#fbbf24;border:1px solid #7c5b19;padding:4px 8px;border-radius:20px}.tools{display:flex;gap:7px;flex-wrap:wrap;padding:12px;background:#111827;border-bottom:1px solid #263247}button,.filebtn{background:#243248;color:#e5e7eb;border:1px solid #3b4c66;padding:8px 11px;border-radius:7px;cursor:pointer;font-size:12px}button:hover,.filebtn:hover{background:#334761}button.primary{background:#075985;border-color:#0e7490}button:disabled{opacity:.4;cursor:not-allowed}.meta{display:flex;justify-content:space-between;padding:10px 14px;color:#93c5fd;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(0,1fr)  minmax(260px,34%);gap:10px;padding:0 12px 12px;height:calc(100vh - 174px);min-height:380px}.editorbox,.outputbox{background:#0f172a;border:1px solid #263247;border-radius:9px;overflow:hidden;display:flex;flex-direction:column}.panehead{padding:9px 12px;background:#172235;color:#9fb2cc;font-size:12px}.editwrap{display:flex;flex:1;min-height:0}#gutter{padding:12px 8px;color:#52627b;text-align:right;white-space:pre;font:13px/1.55 monospace;user-select:none}textarea{flex:1;resize:none;border:0;outline:0;background:#0b1220;color:#e5e7eb;padding:12px;font:13px/1.55 ui-monospace,monospace;white-space:pre;tab-size:4}#output{padding:12px;white-space:pre-wrap;overflow:auto;font:13px/1.5 ui-monospace,monospace;flex:1;color:#a7f3d0}.status{padding:8px 14px;color:#fbbf24;font-size:12px}.hidden{display:none}input[type=text]{background:#0b1220;color:#fff;border:1px solid #3b4c66;border-radius:6px;padding:8px;min-width:90px}.row{display:flex;gap:7px;padding:8px;flex-wrap:wrap}iframe{width:100%;height:100%;background:white;border:0}.notice{color:#fcd34d;font-size:12px;padding:10px 14px;line-height:1.5}@media(max-width:760px){.workspace{grid-template-columns:1fr;height:auto}.editorbox{height:55vh}.outputbox{height:240px}.top{align-items:flex-start;flex-direction:column}}
-</style></head><body>
-<header class="top"><strong>Nice Java IDE</strong><span class="tag">BROWSER PREVIEW · UI / LOGIC TEST</span></header>
+:root{color-scheme:dark;font:14px system-ui;background:#0b1120;color:#e5e7eb}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;height:100%;background:#0b1120}
+body{display:flex;flex-direction:column;min-height:100vh}
+.top{padding:14px 18px;background:#111827;border-bottom:1px solid #263247;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.top strong{font-size:19px}
+.tag{font-size:11px;color:#fbbf24;border:1px solid #7c5b19;padding:4px 8px;border-radius:20px}
+.tools{display:flex;gap:7px;flex-wrap:wrap;padding:12px;background:#111827;border-bottom:1px solid #263247}
+button,.filebtn{background:#243248;color:#e5e7eb;border:1px solid #3b4c66;padding:8px 11px;border-radius:7px;cursor:pointer;font-size:12px}
+button:hover,.filebtn:hover{background:#334761}
+button.primary{background:#075985;border-color:#0e7490}
+button:disabled{opacity:.4;cursor:not-allowed}
+.meta{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;color:#93c5fd;font-size:12px}
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,34%);gap:10px;padding:0 12px 12px;flex:1;min-height:380px}
+.editorbox,.outputbox{background:#0f172a;border:1px solid #263247;border-radius:9px;overflow:hidden;display:flex;flex-direction:column;min-width:0;min-height:0}
+.panehead{padding:9px 12px;background:#172235;color:#9fb2cc;font-size:12px;flex:none}
+.editwrap{display:flex;flex:1;min-height:0;min-width:0;overflow:hidden}
+#editor{display:none}
+.CodeMirror{height:100%;width:100%;min-height:0;background:#212121;color:#eeffff;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
+.CodeMirror-gutters{background:#1b1b1b;border-right:1px solid #374151}
+.CodeMirror-linenumber{color:#64748b;padding:0 8px 0 5px}
+.CodeMirror-cursor{border-left:2px solid #f8fafc}
+.CodeMirror-selected{background:#334155!important}
+.CodeMirror-focused .CodeMirror-selected{background:#334155!important}
+.CodeMirror-activeline-background{background:rgba(148,163,184,.09)}
+.CodeMirror-matchingbracket{color:#fff!important;background:#14532d;outline:1px solid #22c55e}
+.CodeMirror-nonmatchingbracket{color:#fff!important;background:#7f1d1d}
+.CodeMirror-scroll{min-height:100%}
+#output{padding:12px;white-space:pre-wrap;overflow:auto;font:13px/1.5 ui-monospace,monospace;flex:1;color:#a7f3d0;margin:0}
+.status{padding:8px 14px;color:#fbbf24;font-size:12px;flex:none}
+.hidden{display:none!important}
+input[type=text]{background:#0b1220;color:#fff;border:1px solid #3b4c66;border-radius:6px;padding:8px;min-width:90px}
+.row{display:flex;gap:7px;padding:8px;flex-wrap:wrap;flex:none}
+.row input{flex:1;min-width:110px}
+iframe{width:100%;height:100%;background:white;border:0}
+.notice{color:#fcd34d;font-size:12px;padding:10px 14px;line-height:1.5}
+@media(max-width:760px){
+ .workspace{grid-template-columns:1fr;grid-template-rows:minmax(320px,55vh) minmax(220px,30vh);height:auto;min-height:650px}
+ .top{align-items:flex-start;flex-direction:column}
+ .meta{flex-wrap:wrap}
+ .tools{gap:6px;padding:9px}
+ button{padding:8px 9px}
+}
+</style>
+</head>
+<body>
+<header class="top"><strong>Nice Java IDE</strong><span class="tag">BROWSER PREVIEW · CODEMIRROR 5.65.16</span></header>
 <nav class="tools">
 <button id="newBtn">New</button><button id="kotlinBtn">Kotlin</button><button id="filesBtn">Files</button><button id="setupBtn">Setup Folders</button><button id="openBtn">Open</button><button id="saveBtn">Save</button><button id="saveAsBtn">Save As</button><button id="findBtn">Find</button><button id="replaceBtn">Replace</button><button id="undoBtn">Undo</button><button id="redoBtn">Redo</button><button id="deviceBtn">Device</button><button id="jdkBtn">Install JDK</button><button id="libsBtn">Libraries</button><button class="primary" id="runBtn">Run</button><button id="previewBtn">Preview</button>
-<input class="hidden" id="fileInput" type="file" accept=".java,.kt,.kts,.html,.css,.js,.txt"><a id="downloadLink" class="hidden"></a>
+<input class="hidden" id="fileInput" type="file" accept=".java,.kt,.kts,.html,.htm,.css,.js,.json,.xml,.md,.py,.txt"><a id="downloadLink" class="hidden"></a>
 </nav>
 <div class="meta"><span id="fileLabel">Main.java · Java</span><span id="stats">1 line · 0 chars</span></div>
-<div class="notice">Preview mode: UI and browser-side editor actions are interactive. Native Android permissions, bundled JDK/Kotlin compiler execution, and device APIs are not simulated here.</div>
-<main class="workspace"><section class="editorbox"><div class="panehead">EDITOR</div><div class="editwrap"><div id="gutter">1</div><textarea id="editor" spellcheck="false" aria-label="Code editor"></textarea></div><div class="row"><input id="findText" type="text" placeholder="Find text"><input id="replaceText" type="text" placeholder="Replace with"><button id="findNext">Find next</button><button id="replaceAll">Replace all</button></div></section>
-<section class="outputbox"><div class="panehead" id="outputTitle">OUTPUT / TEST CONSOLE</div><pre id="output">Ready. Select Run to see preview-mode behavior.</pre><iframe id="htmlFrame" class="hidden" sandbox="allow-scripts"></iframe></section></main>
+<div class="notice">Browser preview: CodeMirror runs from local bundled files (offline). Native Android editor, JDK installation, compiler execution and device APIs remain in the Android app and are not simulated here.</div>
+<main class="workspace">
+<section class="editorbox">
+<div class="panehead">EDITOR · CODEMIRROR</div>
+<div class="editwrap"><textarea id="editor" spellcheck="false" aria-label="Code editor"></textarea></div>
+<div class="row"><input id="findText" type="text" placeholder="Find text"><input id="replaceText" type="text" placeholder="Replace with"><button id="findNext">Find next</button><button id="replaceAll">Replace all</button></div>
+</section>
+<section class="outputbox">
+<div class="panehead" id="outputTitle">OUTPUT / TEST CONSOLE</div>
+<pre id="output">Ready. Select Run to see preview-mode behavior.</pre>
+<iframe id="htmlFrame" class="hidden" sandbox="allow-scripts"></iframe>
+</section>
+</main>
 <div class="status" id="status">Ready · Browser preview only</div>
-<script src="ide-core.js"></script><script>
+
+<script src="vendor/codemirror/lib/codemirror.js"></script>
+<script src="vendor/codemirror/addon/edit/closebrackets.js"></script>
+<script src="vendor/codemirror/addon/edit/matchbrackets.js"></script>
+<script src="vendor/codemirror/addon/selection/active-line.js"></script>
+<script src="vendor/codemirror/addon/comment/comment.js"></script>
+<script src="vendor/codemirror/mode/clike/clike.js"></script>
+<script src="vendor/codemirror/mode/xml/xml.js"></script>
+<script src="vendor/codemirror/mode/javascript/javascript.js"></script>
+<script src="vendor/codemirror/mode/css/css.js"></script>
+<script src="vendor/codemirror/mode/htmlmixed/htmlmixed.js"></script>
+<script src="vendor/codemirror/mode/markdown/markdown.js"></script>
+<script src="vendor/codemirror/mode/python/python.js"></script>
+<script src="ide-core.js"></script>
+<script>
 (() => {
-const $=id=>document.getElementById(id), editor=$('editor'), output=$('output'), frame=$('htmlFrame');
-let filename='Main.java', saved='', undo=[], redo=[], lastFind=-1;
-const setStatus=s=>$('status').textContent=s;
-function sync(){const lines=NiceIdeCore.countLines(editor.value);$('gutter').textContent=Array.from({length:lines},(_,i)=>i+1).join('\n');$('stats').textContent=lines+' lines · '+editor.value.length+' chars';$('fileLabel').textContent=filename+' · '+NiceIdeCore.detectLanguage(filename);$('undoBtn').disabled=!undo.length;$('redoBtn').disabled=!redo.length}
-function setFile(name,content){filename=name;editor.value=content;saved=content;undo=[];redo=[];sync();setStatus('Opened '+filename)}
-function change(fn){undo.push(editor.value);if(undo.length>100)undo.shift();redo=[];fn();sync()}
-function newFile(name='Main.java'){setFile(name,NiceIdeCore.starterFor(name))}
-editor.addEventListener('input',()=>{if(undo[undo.length-1]!==editor.value){/* browser typing remains directly editable */}sync()});
-$('newBtn').onclick=()=>newFile('Main.java');
-$('kotlinBtn').onclick=()=>newFile('Main.kt');
-$('filesBtn').onclick=()=>{output.textContent='Browser preview files are local to this tab. Use Open to load a file or Save to download it.';setStatus('Files panel preview')};
-$('setupBtn').onclick=()=>{output.textContent='Android folder permissions cannot be granted in a browser. Use the Android app for Downloads/NiceJava folder setup.';setStatus('Native-only feature')};
-$('openBtn').onclick=()=>$('fileInput').click();
-$('fileInput').onchange=async e=>{const f=e.target.files[0];if(f)setFile(f.name,await f.text());e.target.value=''};
-function download(){const blob=new Blob([editor.value],{type:'text/plain'}),url=URL.createObjectURL(blob),a=$('downloadLink');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);saved=editor.value;setStatus('Downloaded '+filename)}
-$('saveBtn').onclick=download;$('saveAsBtn').onclick=()=>{const n=prompt('Save file as:',filename);if(n){filename=n;sync();download()}};
-$('undoBtn').onclick=()=>{if(!undo.length)return;redo.push(editor.value);editor.value=undo.pop();sync();setStatus('Undo (preview)')};
-$('redoBtn').onclick=()=>{if(!redo.length)return;undo.push(editor.value);editor.value=redo.pop();sync();setStatus('Redo (preview)')};
-$('findBtn').onclick=()=>{$('findText').focus();setStatus('Enter text and choose Find next')};
-$('replaceBtn').onclick=()=>{$('replaceText').focus();setStatus('Enter find and replacement text')};
-$('findNext').onclick=()=>{const q=$('findText').value;if(!q)return;const hits=NiceIdeCore.findMatches(editor.value,q);lastFind=(lastFind+1)%Math.max(1,hits.length);if(hits.length){editor.focus();editor.setSelectionRange(hits[lastFind],hits[lastFind]+q.length);setStatus('Match '+(lastFind+1)+' of '+hits.length)}else setStatus('No match found')};
-$('replaceAll').onclick=()=>{const q=$('findText').value;if(!q)return;const next=NiceIdeCore.replaceAll(editor.value,q,$('replaceText').value);change(()=>editor.value=next);setStatus('Replace all complete')};
-$('deviceBtn').onclick=()=>{output.textContent='Browser environment\nUser agent: '+navigator.userAgent+'\nNative Android device details are unavailable.'};
-$('jdkBtn').onclick=()=>{output.textContent='JDK installation is an Android-native operation. This preview does not install or execute OpenJDK.';setStatus('Native-only feature')};
-$('libsBtn').onclick=()=>{output.textContent='Bundled Java libraries are packaged in the Android APK. Browser preview does not load the APK library bundle.'};
-$('runBtn').onclick=()=>{const lang=NiceIdeCore.detectLanguage(filename);if(lang==='html'){frame.srcdoc=editor.value;frame.classList.remove('hidden');output.classList.add('hidden');$('outputTitle').textContent='HTML LIVE PREVIEW';setStatus('HTML preview rendered in sandboxed frame')}else{frame.classList.add('hidden');output.classList.remove('hidden');$('outputTitle').textContent='OUTPUT / TEST CONSOLE';output.textContent='Preview mode cannot compile '+lang+' code.\n\nThis action is reserved for the Android app with its bundled OpenJDK 21 / Kotlin compiler.\n\nEditor and file operations can still be tested here.';setStatus('Compilation not simulated') }};
-$('previewBtn').onclick=()=>{if(NiceIdeCore.detectLanguage(filename)==='html'){$('runBtn').click()}else{output.textContent='Choose an .html file to use browser preview.';setStatus('HTML file required')}};
-newFile();sync();
+'use strict';
+const $ = id => document.getElementById(id);
+const textarea = $('editor'), output = $('output'), frame = $('htmlFrame');
+let filename = 'Main.java', saved = '', lastFind = -1, currentMode = 'text/x-java';
+const setStatus = value => $('status').textContent = value;
+const cm = CodeMirror.fromTextArea(textarea, {
+  mode: currentMode,
+  theme: 'material-darker',
+  lineNumbers: true,
+  styleActiveLine: true,
+  matchBrackets: true,
+  autoCloseBrackets: true,
+  indentUnit: 4,
+  tabSize: 4,
+  indentWithTabs: false,
+  lineWrapping: false,
+  viewportMargin: 20,
+  scrollbarStyle: 'native',
+  autofocus: false,
+  extraKeys: {
+    'Ctrl-S': () => download(),
+    'Cmd-S': () => download(),
+    'Ctrl-Z': 'undo',
+    'Cmd-Z': 'undo',
+    'Ctrl-Y': 'redo',
+    'Cmd-Shift-Z': 'redo',
+    'Ctrl-F': () => $('findText').focus(),
+    'Cmd-F': () => $('findText').focus(),
+    'Tab': cm => cm.replaceSelection('    ', 'end')
+  }
+});
+function modeFor(name) {
+  const ext = String(name || '').toLowerCase().split('.').pop();
+  return ({java:'text/x-java',kt:'text/x-kotlin',kts:'text/x-kotlin',html:'htmlmixed',htm:'htmlmixed',css:'css',js:'javascript',json:{name:'javascript',json:true},xml:'application/xml',md:'markdown',py:'python'})[ext] || 'text/plain';
+}
+function languageLabel(name) {
+  const ext = String(name || '').toLowerCase().split('.').pop();
+  return ({java:'Java',kt:'Kotlin',kts:'Kotlin Script',html:'HTML',htm:'HTML',css:'CSS',js:'JavaScript',json:'JSON',xml:'XML',md:'Markdown',py:'Python',txt:'Text'})[ext] || 'Text';
+}
+function sync() {
+  const value = cm.getValue();
+  const lines = NiceIdeCore.countLines(value);
+  $('stats').textContent = lines + ' lines · ' + value.length + ' chars';
+  $('fileLabel').textContent = filename + ' · ' + languageLabel(filename);
+  $('undoBtn').disabled = !cm.historySize().undo;
+  $('redoBtn').disabled = !cm.historySize().redo;
+}
+function setFile(name, content) {
+  filename = name || 'Untitled.txt';
+  cm.setOption('mode', modeFor(filename));
+  cm.setValue(String(content ?? ''));
+  cm.clearHistory();
+  saved = cm.getValue();
+  lastFind = -1;
+  sync();
+  setStatus('Opened ' + filename);
+}
+function newFile(name='Main.java') { setFile(name, NiceIdeCore.starterFor(name)); }
+function download() {
+  const blob = new Blob([cm.getValue()], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob), a = $('downloadLink');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saved = cm.getValue(); sync(); setStatus('Downloaded ' + filename);
+}
+cm.on('change', sync);
+cm.on('cursorActivity', () => {
+  const cursor = cm.getCursor();
+  $('stats').title = 'Line ' + (cursor.line + 1) + ', column ' + (cursor.ch + 1);
+});
+$('newBtn').onclick = () => newFile('Main.java');
+$('kotlinBtn').onclick = () => newFile('Main.kt');
+$('filesBtn').onclick = () => {
+  output.textContent = 'Browser preview files are local to this tab. Use Open to load a file or Save to download it.';
+  setStatus('Files panel preview');
+};
+$('setupBtn').onclick = () => {
+  output.textContent = 'Android folder permissions cannot be granted in a browser. Use the Android app for Downloads/NiceJava folder setup.';
+  setStatus('Native-only feature');
+};
+$('openBtn').onclick = () => $('fileInput').click();
+$('fileInput').onchange = async event => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  try { setFile(file.name, await file.text()); }
+  catch (error) { setStatus('Open failed: ' + error.message); }
+  event.target.value = '';
+};
+$('saveBtn').onclick = download;
+$('saveAsBtn').onclick = () => {
+  const name = prompt('Save file as:', filename);
+  if (name && name.trim()) { filename = name.trim(); cm.setOption('mode', modeFor(filename)); download(); }
+};
+$('undoBtn').onclick = () => { cm.undo(); cm.focus(); sync(); setStatus('Undo'); };
+$('redoBtn').onclick = () => { cm.redo(); cm.focus(); sync(); setStatus('Redo'); };
+$('findBtn').onclick = () => { $('findText').focus(); setStatus('Enter text and choose Find next'); };
+$('replaceBtn').onclick = () => { $('replaceText').focus(); setStatus('Enter find and replacement text'); };
+$('findNext').onclick = () => {
+  const query = $('findText').value;
+  if (!query) return;
+  const matches = NiceIdeCore.findMatches(cm.getValue(), query);
+  if (!matches.length) { lastFind = -1; setStatus('No match found'); return; }
+  lastFind = (lastFind + 1) % matches.length;
+  const from = cm.posFromIndex(matches[lastFind]), to = cm.posFromIndex(matches[lastFind] + query.length);
+  cm.focus(); cm.setSelection(from, to); cm.scrollIntoView({from, to}, 80);
+  setStatus('Match ' + (lastFind + 1) + ' of ' + matches.length);
+};
+$('replaceAll').onclick = () => {
+  const query = $('findText').value;
+  if (!query) return;
+  const next = NiceIdeCore.replaceAll(cm.getValue(), query, $('replaceText').value);
+  if (next === cm.getValue()) { setStatus('No matching text'); return; }
+  cm.operation(() => cm.replaceRange(next, {line:0,ch:0}, {line:cm.lastLine(),ch:cm.getLine(cm.lastLine()).length}, '+input'));
+  cm.focus(); sync(); setStatus('Replace all complete');
+};
+$('deviceBtn').onclick = () => { output.textContent = 'Browser environment\\nUser agent: ' + navigator.userAgent + '\\nNative Android device details are unavailable.'; };
+$('jdkBtn').onclick = () => { output.textContent = 'JDK installation is an Android-native operation. This preview does not install or execute OpenJDK.'; setStatus('Native-only feature'); };
+$('libsBtn').onclick = () => { output.textContent = 'Bundled Java libraries are packaged in the Android APK. Browser preview does not load the APK library bundle.'; };
+$('runBtn').onclick = () => {
+  const lang = NiceIdeCore.detectLanguage(filename);
+  if (lang === 'html') {
+    frame.srcdoc = cm.getValue(); frame.classList.remove('hidden'); output.classList.add('hidden');
+    $('outputTitle').textContent = 'HTML LIVE PREVIEW'; setStatus('HTML preview rendered in sandboxed frame');
+  } else {
+    frame.classList.add('hidden'); output.classList.remove('hidden'); $('outputTitle').textContent = 'OUTPUT / TEST CONSOLE';
+    output.textContent = 'Preview mode cannot compile ' + lang + ' code.\\n\\nThis action is reserved for the Android app with its bundled OpenJDK 21 / Kotlin compiler.\\n\\nEditor and file operations can still be tested here.';
+    setStatus('Compilation not simulated');
+  }
+};
+$('previewBtn').onclick = () => {
+  if (NiceIdeCore.detectLanguage(filename) === 'html') $('runBtn').click();
+  else { output.textContent = 'Choose an .html file to use browser preview.'; setStatus('HTML file required'); }
+};
+newFile();
+sync();
 })();
-</script></body></html>
+</script>
+</body>
+</html>
