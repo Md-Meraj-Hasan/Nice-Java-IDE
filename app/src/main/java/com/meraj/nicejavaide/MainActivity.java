@@ -1155,9 +1155,18 @@ public class MainActivity extends Activity {
             try {
                 deleteTree(staging);
                 if (!staging.mkdirs()) throw new IllegalStateException("Cannot create JDK folder");
-                try (InputStream raw = getAssets().open("jdk21-android.tar.gz");
-                     GzipCompressorInputStream gzip = new GzipCompressorInputStream(raw);
-                     TarArchiveInputStream tar = new TarArchiveInputStream(gzip)) {
+                // Android's asset packaging exposes this .tar.gz source asset as
+                // jdk21-android.tar in the APK. Read that packaged name and detect
+                // gzip by its magic bytes instead of relying on the filename suffix.
+                try (InputStream raw = getAssets().open("jdk21-android.tar");
+                     java.io.BufferedInputStream buffered = new java.io.BufferedInputStream(raw)) {
+                    buffered.mark(2);
+                    int first = buffered.read();
+                    int second = buffered.read();
+                    buffered.reset();
+                    InputStream tarSource = (first == 0x1f && second == 0x8b)
+                            ? new GzipCompressorInputStream(buffered) : buffered;
+                    try (TarArchiveInputStream tar = new TarArchiveInputStream(tarSource)) {
                     TarArchiveEntry entry;
                     byte[] buffer = new byte[64 * 1024];
                     while ((entry = tar.getNextTarEntry()) != null) {
@@ -1189,6 +1198,7 @@ public class MainActivity extends Activity {
                             }
                             if ((entry.getMode() & 0111) != 0) output.setExecutable(true, false);
                         }
+                    }
                     }
                 }
                 File home = findJdkHome(staging, 0);
