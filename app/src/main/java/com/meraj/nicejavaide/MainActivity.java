@@ -6,6 +6,8 @@ import android.net.Uri;
 import android.database.Cursor;
 import android.provider.DocumentsContract;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Build;
 import android.os.StatFs;
 import android.text.Editable;
@@ -63,9 +65,22 @@ public class MainActivity extends Activity {
     private Uri currentUri;
     private final ArrayDeque<String> undoStack = new ArrayDeque<>();
     private final ArrayDeque<String> redoStack = new ArrayDeque<>();
-    private String lastEditorText = "";
     private boolean restoringEditor = false;
-    private static final int HISTORY_LIMIT = 100;
+    private boolean undoGroupActive = false;
+    private long historyMemoryChars = 0L;
+    private static final int HISTORY_LIMIT = 30;
+    private static final long HISTORY_MEMORY_LIMIT_CHARS = 8L * 1024L * 1024L;
+    private final Runnable finishUndoGroupTask = () -> undoGroupActive = false;
+    private final CodeSyntaxHighlighter syntaxHighlighter = new CodeSyntaxHighlighter();
+    private final Handler highlightHandler = new Handler(Looper.getMainLooper());
+    private final Runnable incrementalHighlightTask = () -> runPendingHighlight();
+    private int editStartLine = 0;
+    private int editStartLineOffset = 0;
+    private int editChangedEndLine = 0;
+    private int editOldNewlines = 0;
+    private int editNewNewlines = 0;
+    private boolean hasPendingHighlight = false;
+    private boolean pendingFullHighlight = false;
     private File jdkHome;
 
     @Override
@@ -86,6 +101,13 @@ public class MainActivity extends Activity {
                     .setNegativeButton("Later", null)
                     .show();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        highlightHandler.removeCallbacks(incrementalHighlightTask);
+        highlightHandler.removeCallbacks(finishUndoGroupTask);
+        super.onDestroy();
     }
 
     private void buildUi() {
@@ -168,17 +190,42 @@ public class MainActivity extends Activity {
         editor.setMinLines(18);
         editor.setTextIsSelectable(true);
         editor.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-            @Override public void afterTextChanged(Editable editable) {
-                String current = editable.toString();
-                if (!restoringEditor && !current.equals(lastEditorText)) {
-                    undoStack.push(lastEditorText);
-                    while (undoStack.size() > HISTORY_LIMIT) undoStack.removeLast();
-                    redoStack.clear();
-                    lastEditorText = current;
+            private int changeStartLine;
+            private int changeStartOffset;
+            private String oldFragment = "";
+            private String newFragment = "";
+
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                if (!restoringEditor && !undoGroupActive) {
+                    clearRedoHistory();
+                    pushUndoSnapshot(s.toString());
+                    undoGroupActive = true;
                 }
-                CodeSyntaxHighlighter.apply(editable, getCurrentExtension());
+                oldFragment = s.subSequence(start, start + count).toString();
+                changeStartOffset = start;
+                android.text.Layout layout = editor.getLayout();
+                if (layout != null && layout.getLineCount() > 0) {
+                    changeStartLine = layout.getLineForOffset(Math.min(start, s.length()));
+                    changeStartOffset = layout.getLineStart(changeStartLine);
+                } else {
+                    changeStartLine = 0;
+                    for (int i = 0; i < start; i++) if (s.charAt(i) == '\\n') changeStartLine++;
+                    changeStartOffset = start;
+                    while (changeStartOffset > 0 && s.charAt(changeStartOffset - 1) != '\\n') changeStartOffset--;
+                }
+            }
+
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                newFragment = s.subSequence(start, start + count).toString();
+            }
+
+            @Override public void afterTextChanged(Editable editable) {
+                if (!restoringEditor) {
+                    highlightHandler.removeCallbacks(finishUndoGroupTask);
+                    highlightHandler.postDelayed(finishUndoGroupTask, 650);
+                    queueIncrementalHighlight(changeStartLine, changeStartOffset,
+                            countNewlines(oldFragment), countNewlines(newFragment));
+                }
             }
         });
         LinearLayout.LayoutParams editorParams = new LinearLayout.LayoutParams(
@@ -197,13 +244,118 @@ public class MainActivity extends Activity {
         status.setText(isJdkInstalled() ? "OpenJDK 21 files installed" : "Full OpenJDK 21 bundled • ready to install offline");
     }
 
+    private void clearRedoHistory() {
+        while (!redoStack.isEmpty()) historyMemoryChars -= redoStack.removeLast().length();
+        if (historyMemoryChars < 0) historyMemoryChars = 0;
+    }
+
+    private void clearUndoRedoHistory() {
+        undoStack.clear();
+        redoStack.clear();
+        historyMemoryChars = 0L;
+    }
+
+    private void pushUndoSnapshot(String snapshot) {
+        if (snapshot == null) snapshot = "";
+        undoStack.push(snapshot);
+        historyMemoryChars += snapshot.length();
+        trimHistory();
+    }
+
+    private void pushRedoSnapshot(String snapshot) {
+        if (snapshot == null) snapshot = "";
+        redoStack.push(snapshot);
+        historyMemoryChars += snapshot.length();
+        trimHistory();
+    }
+
+    private void trimHistory() {
+        while ((undoStack.size() + redoStack.size() > HISTORY_LIMIT
+                || historyMemoryChars > HISTORY_MEMORY_LIMIT_CHARS)
+                && (undoStack.size() > 1 || redoStack.size() > 1)) {
+            if (!undoStack.isEmpty() && (redoStack.isEmpty()
+                    || undoStack.size() >= redoStack.size())) {
+                historyMemoryChars -= undoStack.removeLast().length();
+            } else if (!redoStack.isEmpty()) {
+                historyMemoryChars -= redoStack.removeLast().length();
+            }
+        }
+        if (historyMemoryChars < 0) historyMemoryChars = 0;
+    }
+
+    private static int countNewlines(CharSequence value) {
+        if (value == null) return 0;
+        int count = 0;
+        for (int i = 0; i < value.length(); i++) if (value.charAt(i) == '\\n') count++;
+        return count;
+    }
+
+    private void queueFullHighlight() {
+        highlightHandler.removeCallbacks(incrementalHighlightTask);
+        hasPendingHighlight = false;
+        pendingFullHighlight = true;
+        highlightHandler.postDelayed(incrementalHighlightTask, 70);
+    }
+
+    private void queueIncrementalHighlight(int startLine, int startLineOffset,
+                                           int oldNewlines, int newNewlines) {
+        if (pendingFullHighlight) return;
+        if (hasPendingHighlight) {
+            // Several keystrokes in the same edited block can be coalesced.
+            // If edits jump to a distant line before the debounce fires, use
+            // a safe full pass rather than risk leaving stale colors behind.
+            if (startLine > editChangedEndLine + 1 || startLine < editStartLine - 1) {
+                queueFullHighlight();
+                return;
+            }
+            if (startLine < editStartLine) {
+                editStartLine = startLine;
+                editStartLineOffset = startLineOffset;
+            }
+            editChangedEndLine = Math.max(editChangedEndLine, startLine + newNewlines);
+            editOldNewlines += oldNewlines;
+            editNewNewlines += newNewlines;
+        } else {
+            editStartLine = startLine;
+            editStartLineOffset = startLineOffset;
+            editChangedEndLine = startLine + newNewlines;
+            editOldNewlines = oldNewlines;
+            editNewNewlines = newNewlines;
+            hasPendingHighlight = true;
+        }
+        highlightHandler.removeCallbacks(incrementalHighlightTask);
+        highlightHandler.postDelayed(incrementalHighlightTask, 85);
+    }
+
+    private void runPendingHighlight() {
+        Editable editable = editor == null ? null : editor.getText();
+        if (editable == null) return;
+        if (pendingFullHighlight) {
+            pendingFullHighlight = false;
+            hasPendingHighlight = false;
+            syntaxHighlighter.resetAndHighlight(editable, getCurrentExtension());
+            return;
+        }
+        if (!hasPendingHighlight) return;
+        int startLine = editStartLine;
+        int startOffset = editStartLineOffset;
+        int endLine = editChangedEndLine;
+        int oldLines = editOldNewlines;
+        int newLines = editNewNewlines;
+        hasPendingHighlight = false;
+        editOldNewlines = editNewNewlines = 0;
+        syntaxHighlighter.update(editable, getCurrentExtension(), startLine,
+                startOffset, endLine, oldLines, newLines);
+    }
+
     private void setEditorText(String value) {
         restoringEditor = true;
         editor.setText(value);
-        lastEditorText = value;
-        undoStack.clear();
-        redoStack.clear();
+        clearUndoRedoHistory();
+        undoGroupActive = false;
+        highlightHandler.removeCallbacks(finishUndoGroupTask);
         restoringEditor = false;
+        queueFullHighlight();
     }
 
     private void undo() {
@@ -211,14 +363,17 @@ public class MainActivity extends Activity {
             status.setText("Nothing to undo");
             return;
         }
+        highlightHandler.removeCallbacks(finishUndoGroupTask);
+        undoGroupActive = false;
         String current = editor.getText().toString();
-        redoStack.push(current);
         String previous = undoStack.pop();
+        historyMemoryChars -= previous.length();
+        pushRedoSnapshot(current);
         restoringEditor = true;
         editor.setText(previous);
         editor.setSelection(editor.length());
-        lastEditorText = previous;
         restoringEditor = false;
+        queueFullHighlight();
         status.setText("Undo");
     }
 
@@ -227,14 +382,17 @@ public class MainActivity extends Activity {
             status.setText("Nothing to redo");
             return;
         }
+        highlightHandler.removeCallbacks(finishUndoGroupTask);
+        undoGroupActive = false;
         String current = editor.getText().toString();
-        undoStack.push(current);
         String next = redoStack.pop();
+        historyMemoryChars -= next.length();
+        pushUndoSnapshot(current);
         restoringEditor = true;
         editor.setText(next);
         editor.setSelection(editor.length());
-        lastEditorText = next;
         restoringEditor = false;
+        queueFullHighlight();
         status.setText("Redo");
     }
 
