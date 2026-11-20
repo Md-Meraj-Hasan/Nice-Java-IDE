@@ -63,3 +63,38 @@ The source patch improves three failure points:
 
 ### Required device validation
 After installing the APK, use **Tools → Install OpenJDK 21**, then **View → Engine Status**. The runtime test must display `NICE_JAVA_RUNTIME_OK`. Next use **Tools → Install Java Project Libraries** and test a small Java file importing Gson. A successful Gradle build alone does not prove that native JDK binaries can execute on the target Android device.
+
+
+## CodeMirror 5.65.16 — Web Preview editor
+
+The browser-based `web-preview/` IDE now bundles the official CodeMirror 5.65.16 npm distribution locally:
+- Compiled CodeMirror core and base CSS.
+- Complete official language-mode, addon, theme, and keymap directories.
+- The Web Preview loads Java/Kotlin, HTML, CSS, JavaScript, JSON, XML, Markdown, and Python modes from local files.
+- Editor features enabled: line numbers, active-line highlight, bracket matching, auto-close brackets, indentation, built-in undo/redo, find/replace, and keyboard shortcuts.
+- No CDN or runtime network request is required for CodeMirror.
+
+The CodeMirror files are distributed under their included MIT license; see `web-preview/vendor/codemirror/LICENSE`.
+
+**Scope note:** The Android native editing surface in `MainActivity.java` remains the existing native `EditText` plus syntax highlighters. It was deliberately not replaced with a WebView editor, so this CodeMirror addition applies to the standalone browser Web Preview and does not change the native APK editor UI or its compiler/runtime. The standalone `web-preview/` folder is not currently packaged as the APK's editor screen.
+
+
+## Native editor performance patch — incremental highlighting and bounded undo
+
+The native Android editor no longer runs a full-file syntax pass on every keystroke.
+
+- Syntax coloring is debounced by 85 ms while typing.
+- The highlighter tokenizes only the changed line range and stops as soon as the new line text and incoming multiline-comment/string state match the cached old line.
+- Existing spans on unaffected lines are retained; spans are removed and recreated only for lines that need recoloring.
+- Multiline block comments, HTML comments, and Kotlin/Java text-block strings carry lexer state across lines. If editing changes that state, highlighting propagates only until the state converges again.
+- Changed-line offsets are captured from the editor's pre-edit Layout, avoiding a full-document line search on each key.
+- Undo snapshots are grouped across a 650 ms typing burst instead of copying and storing the entire document for every character.
+- Undo/redo history is capped at 30 snapshots and approximately 8 Mi characters of combined history (with at least the most recent snapshot retained).
+
+The native editor remains an Android `EditText`; the Web Preview CodeMirror editor is unchanged by this native performance patch. A 3,000-line synthetic Java document was also checked: a one-line edit queried spans once and created four token spans, rather than rebuilding spans for the whole document.
+
+### Validation
+- Compiled `CodeSyntaxHighlighter.java` against lightweight Android text/color stubs with `javac -Xlint:all`.
+- Ran incremental-vs-full highlighting comparisons for ordinary edits, multiline-comment state changes, line insertion, and line deletion.
+- Re-ran the Web Preview Node tests.
+- Android Gradle build and physical-device typing/ANR profiling still need to be run in Android Studio / on the target phone.
