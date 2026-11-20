@@ -209,9 +209,9 @@ public class MainActivity extends Activity {
                     changeStartOffset = layout.getLineStart(changeStartLine);
                 } else {
                     changeStartLine = 0;
-                    for (int i = 0; i < start; i++) if (s.charAt(i) == '\\n') changeStartLine++;
+                    for (int i = 0; i < start; i++) if (s.charAt(i) == '\n') changeStartLine++;
                     changeStartOffset = start;
-                    while (changeStartOffset > 0 && s.charAt(changeStartOffset - 1) != '\\n') changeStartOffset--;
+                    while (changeStartOffset > 0 && s.charAt(changeStartOffset - 1) != '\n') changeStartOffset--;
                 }
             }
 
@@ -286,7 +286,7 @@ public class MainActivity extends Activity {
     private static int countNewlines(CharSequence value) {
         if (value == null) return 0;
         int count = 0;
-        for (int i = 0; i < value.length(); i++) if (value.charAt(i) == '\\n') count++;
+        for (int i = 0; i < value.length(); i++) if (value.charAt(i) == '\n') count++;
         return count;
     }
 
