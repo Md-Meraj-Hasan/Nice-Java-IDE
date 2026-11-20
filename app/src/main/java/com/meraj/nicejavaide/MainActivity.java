@@ -1202,18 +1202,49 @@ public class MainActivity extends Activity {
                     }
                 }
                 File home = findJdkHome(staging, 0);
-                if (home == null) throw new IllegalStateException("JDK bin/java and bin/javac were not found in the archive");
-                File destination = jdkHome;
-                deleteTree(destination);
-                if (!home.equals(staging)) {
-                    if (!home.renameTo(destination)) throw new IllegalStateException("Cannot move extracted JDK into place");
-                    deleteTree(staging);
-                } else if (!staging.renameTo(destination)) {
-                    throw new IllegalStateException("Cannot finalize JDK installation");
+                if (home == null) {
+                    throw new IllegalStateException("JDK executables not found after extraction. " +
+                            "Expected bin/java and bin/javac under " + staging.getAbsolutePath() +
+                            ". Extracted entries: " + describeJdkTree(staging, 3));
                 }
-                jdkHome = destination;
-                if (!isJdkInstalled()) throw new IllegalStateException("JDK compiler files are missing");
-                success = true;
+                File destination = jdkHome;
+                // Move the complete archive root, not a nested subfolder: symlinks
+                // in Android JDK distributions can be relative to that root.
+                File finalized = new File(getFilesDir(), "openjdk-21-installing-final");
+                deleteTree(finalized);
+                if (!staging.renameTo(finalized)) {
+                    throw new IllegalStateException("Cannot stage extracted JDK at " + finalized.getAbsolutePath());
+                }
+                File relocatedHome = home.equals(staging) ? finalized :
+                        new File(finalized, staging.toURI().relativize(home.toURI()).getPath());
+                deleteTree(destination);
+                if (!finalized.renameTo(destination)) {
+                    throw new IllegalStateException("Cannot finalize extracted JDK from " +
+                            finalized.getAbsolutePath() + " to " + destination.getAbsolutePath());
+                }
+                File relativeHome = home.equals(staging) ? destination :
+                        new File(destination, staging.toURI().relativize(home.toURI()).getPath());
+                if (!relativeHome.isDirectory()) relativeHome = findJdkHome(destination, 0);
+                if (relativeHome == null) {
+                    throw new IllegalStateException("JDK home disappeared after final move: " +
+                            destination.getAbsolutePath() + " " + describeJdkTree(destination, 3));
+                }
+                jdkHome = relativeHome;
+                File javaExe = new File(jdkHome, "bin/java");
+                File javacExe = new File(jdkHome, "bin/javac");
+                File modules = new File(jdkHome, "lib/modules");
+                if (!javaExe.isFile() || !javacExe.isFile() || !modules.isFile()) {
+                    throw new IllegalStateException("JDK incomplete at " + jdkHome.getAbsolutePath() +
+                            " java=" + javaExe.isFile() + " javac=" + javacExe.isFile() +
+                            " modules=" + modules.isFile() + " tree=" + describeJdkTree(destination, 3));
+                }
+                if (!javaExe.setExecutable(true, false) || !javacExe.setExecutable(true, false)) {
+                    if (!javaExe.canExecute() || !javacExe.canExecute()) {
+                        throw new IllegalStateException("JDK executable permissions failed at " + jdkHome.getAbsolutePath());
+                    }
+                }
+                success = isJdkInstalled();
+                if (!success) throw new IllegalStateException("JDK files extracted but runtime validation failed at " + jdkHome.getAbsolutePath());
             } catch (Exception e) {
                 error = e.getClass().getSimpleName() + ": " + e.getMessage();
                 deleteTree(staging);
@@ -1233,6 +1264,26 @@ public class MainActivity extends Activity {
                 }
             });
         }, "Jdk21-Extractor").start();
+    }
+
+    private String describeJdkTree(File folder, int depth) {
+        if (folder == null || depth < 0) return "";
+        StringBuilder out = new StringBuilder();
+        File[] children = folder.listFiles();
+        if (children == null) return folder.getName() + " [unreadable]";
+        java.util.Arrays.sort(children, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+        int shown = 0;
+        for (File child : children) {
+            if (shown++ >= 24) { out.append(" …"); break; }
+            if (out.length() > 0) out.append(", ");
+            out.append(child.getName());
+            if (child.isDirectory() && depth > 0) {
+                out.append("/[").append(describeJdkTree(child, depth - 1)).append("]");
+            } else if (child.isFile()) {
+                out.append("(").append(child.length()).append("B)");
+            }
+        }
+        return out.toString();
     }
 
     private File findJdkHome(File folder, int depth) {
