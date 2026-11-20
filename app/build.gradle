@@ -59,7 +59,7 @@ dependencies {
 def javaLibrariesOutput = layout.buildDirectory.dir('generated/java-libs')
 def offlineAssetsOutput = layout.buildDirectory.dir('generated/offline-assets')
 android.sourceSets.main.assets.srcDir(javaLibrariesOutput)
-android.sourceSets.main.assets.srcDir(offlineAssetsOutput)
+android.sourceSets.main.assets.srcDir(offlineAssetsOutput.get().asFile)
 
 tasks.register('bundleJavaProjectLibraries', Sync) {
     from configurations.javaProjectLibraries
