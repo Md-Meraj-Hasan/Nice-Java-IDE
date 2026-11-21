@@ -1598,7 +1598,9 @@ public class MainActivity extends Activity {
             env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
             String jdkLib = new File(jdkHome, "lib").getAbsolutePath();
             String server = new File(jdkHome, "lib/server").getAbsolutePath();
-            env.put("LD_LIBRARY_PATH", server + ":" + jdkLib + ":" + env.get("LD_LIBRARY_PATH"));
+            String existingLdPath = env.get("LD_LIBRARY_PATH");
+            env.put("LD_LIBRARY_PATH", server + ":" + jdkLib +
+                    (existingLdPath == null || existingLdPath.isEmpty() ? "" : ":" + existingLdPath));
             env.putAll(extraEnvironment);
             try {
                 process = builder.start();
