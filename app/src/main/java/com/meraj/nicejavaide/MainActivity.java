@@ -470,7 +470,20 @@ public class MainActivity extends Activity {
                         if (!executable.exists()) executable = new File(new File(jdkHome, "bin"), toolName + ".exe");
                         List<String> command = new ArrayList<>();
                         String raw = argsInput.getText().toString().trim();
-                        if ("jar".equals(toolName)) {
+                        if ("kotlinc".equals(toolName)) {
+                            // Kotlin compiler is a JVM tool bundled separately, not an OpenJDK bin executable.
+                            File compilerHome = ensureKotlinCompilerInstalled();
+                            File javaLauncher = new File(getApplicationInfo().nativeLibraryDir, "libnicejava.so");
+                            if (!javaLauncher.isFile() || !javaLauncher.canExecute()) {
+                                throw new java.io.IOException("Executable Android Java launcher is missing: " + javaLauncher);
+                            }
+                            command.add(javaLauncher.getAbsolutePath());
+                            command.add("-cp");
+                            command.add(new File(compilerHome, "lib").getAbsolutePath() + File.separator + "*");
+                            command.add("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler");
+                            command.add("-kotlin-home");
+                            command.add(compilerHome.getAbsolutePath());
+                        } else                        if ("jar".equals(toolName)) {
                             // The extracted JDK lives in app-private storage, which may be mounted noexec.
                             // Run the JAR tool as a JDK module through the packaged, executable Java launcher.
                             File javaLauncher = new File(getApplicationInfo().nativeLibraryDir, "libnicejava.so");
@@ -1463,18 +1476,47 @@ public class MainActivity extends Activity {
             deleteTree(staging);
             throw e;
         }
-        File stagedHome = new File(staging, "kotlinc");
-        if (!new File(stagedHome, "lib/kotlin-compiler.jar").isFile()
-                || !new File(stagedHome, "lib/kotlin-stdlib.jar").isFile()) {
+        // Locate the compiler home even when the release ZIP adds a versioned parent folder.
+        File stagedHome = findKotlinCompilerHome(staging);
+        if (stagedHome == null) {
             deleteTree(staging);
-            throw new IllegalStateException("The bundled Kotlin compiler archive is incomplete.");
+            throw new IllegalStateException("Kotlin compiler not found in bundled archive: missing lib/kotlin-compiler.jar or lib/kotlin-stdlib.jar.");
+        }
+        File normalized = new File(staging, "normalized-kotlinc");
+        if (!stagedHome.equals(normalized)) {
+            if (!stagedHome.renameTo(normalized)) {
+                deleteTree(staging);
+                throw new IllegalStateException("Cannot normalize extracted Kotlin compiler folder.");
+            }
         }
         deleteTree(destination);
-        if (!staging.renameTo(destination)) {
+        if (!destination.mkdirs()) {
             deleteTree(staging);
-            throw new IllegalStateException("Cannot activate the extracted Kotlin compiler.");
+            throw new IllegalStateException("Cannot create Kotlin compiler destination.");
         }
+        if (!normalized.renameTo(new File(destination, "kotlinc"))) {
+            deleteTree(staging);
+            deleteTree(destination);
+            throw new IllegalStateException("Cannot activate extracted Kotlin compiler.");
+        }
+        deleteTree(staging);
         return getKotlinCompilerHome();
+    }
+
+    private File findKotlinCompilerHome(File root) {
+        if (root == null || !root.isDirectory()) return null;
+        if (new File(root, "lib/kotlin-compiler.jar").isFile()
+                && new File(root, "lib/kotlin-stdlib.jar").isFile()) return root;
+        File[] children = root.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory()) {
+                    File found = findKotlinCompilerHome(child);
+                    if (found != null) return found;
+                }
+            }
+        }
+        return null;
     }
 
     private void runKotlinProject() {
