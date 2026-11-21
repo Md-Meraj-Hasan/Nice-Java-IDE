@@ -284,6 +284,16 @@ tasks.register('verifyPackagedJdkAsset') {
             }
             logger.lifecycle("Verified packaged OpenJDK asset inside APK: ${entry.name} (${entry.size} bytes)")
 
+            // The Java/Javac ELF launchers must be extracted by PackageManager
+            // into nativeLibraryDir; app-private extracted files can be mounted noexec.
+            ['lib/arm64-v8a/libnicejava.so', 'lib/arm64-v8a/libnicejavac.so'].each { launcherName ->
+                def launcher = zip.getEntry(launcherName)
+                if (launcher == null || launcher.size < 1024) {
+                    throw new GradleException("Missing executable ARM64 JDK launcher in APK: ${launcherName}")
+                }
+                logger.lifecycle("Verified packaged executable JDK launcher: ${launcherName} (${launcher.size} bytes)")
+            }
+
             // Verify that the Kotlin compiler ZIP is also present and contains
             // the exact files expected by MainActivity.ensureKotlinCompilerInstalled().
             def kotlinEntry = zip.getEntry('assets/kotlin-compiler-2.4.21.zip')
