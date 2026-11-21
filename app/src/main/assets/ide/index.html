@@ -78,11 +78,28 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
  };
  const languageSelect=document.getElementById('languageSelect');
  const languageInfo={
-  java:{mode:'nicejava',label:'JAVA',name:'Main.java',sample:'public class Main {\\n    public static void main(String[] args) {\\n        System.out.println("Hello from Nice Java IDE!");\\n    }\\n}\\n'},
-  kotlin:{mode:'nicejava',label:'KOTLIN',name:'Main.kt',sample:'fun main() {\\n    println("Hello from Nice Kotlin IDE!")\\n}\\n'},
-  html:{mode:'nicehtml',label:'HTML',name:'index.html',sample:'<!doctype html>\\n<html>\\n<head>\\n  <meta charset="UTF-8">\\n  <title>My Page</title>\\n  <link rel="stylesheet" href="style.css">\\n</head>\\n<body>\\n  <h1>Hello World</h1>\\n  <script src="app.js"><\\\\/script>\\n</body>\\n</html>\\n'},
-  css:{mode:'nicecss',label:'CSS',name:'style.css',sample:'body {\\n  margin: 0;\\n  font-family: Arial, sans-serif;\\n}\\n'},
-  js:{mode:'nicejs',label:'JAVASCRIPT',name:'app.js',sample:'function greet() {\\n  console.log("Hello World");\\n}\\n\\ngreet();\\n'}
+  java:{mode:'nicejava',label:'JAVA',name:'Main.java',sample:`public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello from Nice Java IDE!");
+    }
+}
+`},
+  kotlin:{mode:'nicejava',label:'KOTLIN',name:'Main.kt',sample:`fun main() {
+    println("Hello from Nice Kotlin IDE!")
+}
+`},
+  html:{mode:'nicehtml',label:'HTML',name:'index.html',sample:'<!doctype html>\\n<html>\\n<head>\\n  <meta charset="UTF-8">\\n  <title>My Page</title>\\n  <link rel="stylesheet" href="style.css">\\n</head>\\n<body>\\n  <h1>Hello World</h1>\\n  <script src="app.js"><\\\\/scr'+'ipt>\\n</body>\\n</html>\\n'},
+  css:{mode:'nicecss',label:'CSS',name:'style.css',sample:`body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+}
+`},
+  js:{mode:'nicejs',label:'JAVASCRIPT',name:'app.js',sample:`function greet() {
+  console.log("Hello World");
+}
+
+greet();
+`}
  };
  languageSelect.addEventListener('change',function(){
   const info=languageInfo[this.value];
