@@ -116,9 +116,9 @@ tasks.register('downloadKotlinCompiler') {
     }
 }
 
-def jdkArchive = javaLibrariesOutput.get().file('jdk21-android.tar.gz')
-def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.4/jdk21-android.tar.gz'
-def jdkSha256 = '9e38b66557db40481d90a6f5cfbce05180414e3131a6b77c4dea1304fcba6e9b'
+def jdkArchive = javaLibrariesOutput.get().file('jdk21-android-arm64.tar.gz')
+def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.14/jdk21-android-arm64.tar.gz'
+def jdkSha256 = 'b6575760724183350c98206082da7829808b62b766e2d30fc253101b1e8cda0e'
 
 tasks.register('downloadOpenJdk21') {
     outputs.file(jdkArchive)
