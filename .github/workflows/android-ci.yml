@@ -44,7 +44,15 @@ jobs:
           const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
           if (scripts.length !== 1) throw new Error('Expected exactly one inline IDE controller script');
           new vm.Script(scripts[0][1]);
-          console.log('CodeMirror JS, CSS references, script tags and IDE controller syntax verified');
+          for (const language of ['java', 'kotlin', 'html', 'css', 'js']) {
+            if (!html.includes('option value="' + language + '"')) {
+              throw new Error('Missing visible language selector option: ' + language);
+            }
+          }
+          if (!html.includes("languageSelect.addEventListener('change'")) {
+            throw new Error('Language selector change handler is missing');
+          }
+          console.log('CodeMirror assets, controller syntax and Java/Kotlin/HTML/CSS/JS selector verified');
           NODE
       - name: Set up JDK 17
         uses: actions/setup-java@v6
