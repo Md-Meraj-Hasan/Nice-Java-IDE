@@ -126,8 +126,8 @@ tasks.register('downloadKotlinCompiler') {
 }
 
 def jdkArchive = layout.projectDirectory.file('src/main/assets/jdk21-android.tar.gz')
-def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.4/jdk21-android.tar.gz'
-def jdkSha256 = '9e38b66557db40481d90a6f5cfbce05180414e3131a6b77c4dea1304fcba6e9b'
+def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.14/jdk21-android-arm64.tar.gz'
+def jdkSha256 = 'b6575760724183350c98206082da7829808b62b766e2d30fc253101b1e8cda0e'
 
 def jdkLauncherOutput = layout.buildDirectory.dir('generated/jniLibs/arm64-v8a')
 
@@ -283,6 +283,16 @@ tasks.register('verifyPackagedJdkAsset') {
                 throw new GradleException("Expected exactly one full-size JDK archive (assets/jdk21-android.tar.gz or assets/jdk21-android.tar). Found: ${candidates}")
             }
             logger.lifecycle("Verified packaged OpenJDK asset inside APK: ${entry.name} (${entry.size} bytes)")
+
+            // The Java/Javac ELF launchers must be extracted by PackageManager
+            // into nativeLibraryDir; app-private extracted files can be mounted noexec.
+            ['lib/arm64-v8a/libnicejava.so', 'lib/arm64-v8a/libnicejavac.so'].each { launcherName ->
+                def launcher = zip.getEntry(launcherName)
+                if (launcher == null || launcher.size < 1024) {
+                    throw new GradleException("Missing executable ARM64 JDK launcher in APK: ${launcherName}")
+                }
+                logger.lifecycle("Verified packaged executable JDK launcher: ${launcherName} (${launcher.size} bytes)")
+            }
 
             // Verify that the Kotlin compiler ZIP is also present and contains
             // the exact files expected by MainActivity.ensureKotlinCompilerInstalled().
