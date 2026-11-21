@@ -1158,7 +1158,7 @@ public class MainActivity extends Activity {
                 // Android's asset packaging exposes this .tar.gz source asset as
                 // jdk21-android.tar in the APK. Read that packaged name and detect
                 // gzip by its magic bytes instead of relying on the filename suffix.
-                try (InputStream raw = getAssets().open("jdk21-android.tar");
+                try (InputStream raw = getAssets().open("jdk21-android-arm64.tar");
                      java.io.BufferedInputStream buffered = new java.io.BufferedInputStream(raw)) {
                     buffered.mark(2);
                     int first = buffered.read();
