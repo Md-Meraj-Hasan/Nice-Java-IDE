@@ -1417,14 +1417,66 @@ public class MainActivity extends Activity {
         return new File(getFilesDir(), "kotlin-compiler/kotlinc");
     }
 
+    private File getKotlinLauncher() {
+        return new File(getApplicationInfo().nativeLibraryDir, "libnicejava.so");
+    }
+
     private boolean isKotlinCompilerInstalled() {
         File home = getKotlinCompilerHome();
-        return new File(home, "lib/kotlin-compiler.jar").isFile()
-                && new File(home, "lib/kotlin-stdlib.jar").isFile();
+        String[] required = {
+                "kotlin-compiler.jar", "kotlin-stdlib.jar", "kotlin-script-runtime.jar",
+                "kotlin-reflect.jar", "kotlin-daemon.jar", "trove4j.jar"
+        };
+        for (String name : required) {
+            File file = new File(home, "lib/" + name);
+            if (!file.isFile() || file.length() == 0) return false;
+        }
+        File launcher = getKotlinLauncher();
+        return launcher.isFile() && launcher.canExecute();
+    }
+
+    private void validateKotlinCompilerHome(File home) throws Exception {
+        String[] required = {
+                "kotlin-compiler.jar", "kotlin-stdlib.jar", "kotlin-script-runtime.jar",
+                "kotlin-reflect.jar", "kotlin-daemon.jar", "trove4j.jar"
+        };
+        for (String name : required) {
+            File file = new File(home, "lib/" + name);
+            if (!file.isFile() || file.length() == 0) {
+                throw new IllegalStateException("Kotlin compiler installation is incomplete. Missing: " +
+                        file.getAbsolutePath());
+            }
+        }
+        File launcher = getKotlinLauncher();
+        if (!launcher.isFile() || !launcher.canExecute()) {
+            throw new IllegalStateException("Android Java launcher is missing or not executable: " +
+                    launcher.getAbsolutePath());
+        }
+    }
+
+    private File findKotlinCompilerHome(File root) {
+        if (root == null || !root.isDirectory()) return null;
+        File compilerJar = new File(root, "lib/kotlin-compiler.jar");
+        File stdlibJar = new File(root, "lib/kotlin-stdlib.jar");
+        if (compilerJar.isFile() && stdlibJar.isFile()) return root;
+        File[] children = root.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory()) {
+                    File found = findKotlinCompilerHome(child);
+                    if (found != null) return found;
+                }
+            }
+        }
+        return null;
     }
 
     private File ensureKotlinCompilerInstalled() throws Exception {
-        if (isKotlinCompilerInstalled()) return getKotlinCompilerHome();
+        if (isKotlinCompilerInstalled()) {
+            File existing = getKotlinCompilerHome();
+            validateKotlinCompilerHome(existing);
+            return existing;
+        }
         File destination = new File(getFilesDir(), "kotlin-compiler");
         File staging = new File(getFilesDir(), "kotlin-compiler-installing");
         long free = new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes();
@@ -1432,7 +1484,7 @@ public class MainActivity extends Activity {
             throw new IllegalStateException("At least 450 MB free internal storage is required to extract the offline Kotlin compiler.");
         }
         deleteTree(staging);
-        if (!staging.mkdirs()) throw new IllegalStateException("Cannot create Kotlin compiler folder.");
+        if (!staging.mkdirs()) throw new IllegalStateException("Cannot create Kotlin compiler staging folder: " + staging.getAbsolutePath());
         try (InputStream raw = getAssets().open("kotlin-compiler-2.4.21.zip");
              ZipInputStream zip = new ZipInputStream(raw)) {
             ZipEntry entry;
@@ -1441,16 +1493,16 @@ public class MainActivity extends Activity {
             while ((entry = zip.getNextEntry()) != null) {
                 File output = new File(staging, entry.getName()).getCanonicalFile();
                 if (!output.getPath().startsWith(base)) {
-                    throw new SecurityException("Unsafe path in Kotlin compiler archive.");
+                    throw new SecurityException("Unsafe path in Kotlin compiler archive: " + entry.getName());
                 }
                 if (entry.isDirectory()) {
                     if (!output.exists() && !output.mkdirs()) {
-                        throw new IllegalStateException("Cannot create compiler folder: " + entry.getName());
+                        throw new IllegalStateException("Cannot create compiler folder: " + output.getAbsolutePath());
                     }
                 } else {
                     File parent = output.getParentFile();
                     if (parent != null && !parent.exists() && !parent.mkdirs()) {
-                        throw new IllegalStateException("Cannot create compiler folder.");
+                        throw new IllegalStateException("Cannot create compiler folder: " + parent.getAbsolutePath());
                     }
                     try (FileOutputStream fileOut = new FileOutputStream(output)) {
                         int count;
@@ -1463,18 +1515,192 @@ public class MainActivity extends Activity {
             deleteTree(staging);
             throw e;
         }
-        File stagedHome = new File(staging, "kotlinc");
-        if (!new File(stagedHome, "lib/kotlin-compiler.jar").isFile()
-                || !new File(stagedHome, "lib/kotlin-stdlib.jar").isFile()) {
+
+        File stagedHome = findKotlinCompilerHome(staging);
+        if (stagedHome == null) {
             deleteTree(staging);
-            throw new IllegalStateException("The bundled Kotlin compiler archive is incomplete.");
+            throw new IllegalStateException("Kotlin compiler archive is invalid. Missing: " +
+                    new File(staging, "*/lib/kotlin-compiler.jar").getAbsolutePath());
+        }
+        try {
+            validateKotlinCompilerHome(stagedHome);
+        } catch (Exception e) {
+            deleteTree(staging);
+            throw e;
+        }
+
+        File normalized = new File(staging, "normalized-kotlinc");
+        if (!stagedHome.equals(normalized) && !stagedHome.renameTo(normalized)) {
+            deleteTree(staging);
+            throw new IllegalStateException("Cannot normalize Kotlin compiler directory: " +
+                    stagedHome.getAbsolutePath());
         }
         deleteTree(destination);
-        if (!staging.renameTo(destination)) {
+        if (!destination.mkdirs()) {
             deleteTree(staging);
-            throw new IllegalStateException("Cannot activate the extracted Kotlin compiler.");
+            throw new IllegalStateException("Cannot create Kotlin compiler destination: " + destination.getAbsolutePath());
         }
-        return getKotlinCompilerHome();
+        File activeHome = new File(destination, "kotlinc");
+        if (!normalized.renameTo(activeHome)) {
+            deleteTree(staging);
+            deleteTree(destination);
+            throw new IllegalStateException("Cannot activate Kotlin compiler at: " + activeHome.getAbsolutePath());
+        }
+        deleteTree(staging);
+        validateKotlinCompilerHome(activeHome);
+        return activeHome;
+    }
+
+    private String kotlinCompilerClasspath(File compilerHome) throws Exception {
+        File lib = new File(compilerHome, "lib");
+        File[] jars = lib.listFiles((dir, name) -> name.endsWith(".jar") && new File(dir, name).isFile());
+        if (jars == null || jars.length == 0) {
+            throw new IllegalStateException("No Kotlin runtime JARs found in: " + lib.getAbsolutePath());
+        }
+        StringBuilder cp = new StringBuilder();
+        for (File jar : jars) {
+            if (cp.length() > 0) cp.append(File.pathSeparator);
+            cp.append(jar.getAbsolutePath());
+        }
+        File compilerJar = new File(lib, "kotlin-compiler.jar");
+        if (!compilerJar.isFile()) throw new IllegalStateException("Missing Kotlin compiler JAR: " + compilerJar.getAbsolutePath());
+        return cp.toString();
+    }
+
+    private String runKotlinJvm(File compilerHome, int timeoutSeconds, String... args) throws Exception {
+        validateKotlinCompilerHome(compilerHome);
+        List<String> command = new ArrayList<>();
+        command.add(getKotlinLauncher().getAbsolutePath());
+        command.add("-Dfile.encoding=UTF-8");
+        command.add("-Duser.home=" + getFilesDir().getAbsolutePath());
+        command.add("-Djava.io.tmpdir=" + getCacheDir().getAbsolutePath());
+        command.add("-Dkotlin.home=" + compilerHome.getAbsolutePath());
+        java.util.Map<String, String> environment = new java.util.HashMap<>();
+        command.add("-cp");
+        command.add(kotlinCompilerClasspath(compilerHome));
+        command.add("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler");
+        java.util.Collections.addAll(command, args);
+        return runNativeJvmCommand(command, timeoutSeconds, environment);
+    }
+
+    private String runNativeJvmCommand(List<String> command, int timeoutSeconds,
+                                       java.util.Map<String, String> extraEnvironment) throws Exception {
+        File outputFile = File.createTempFile("nice-kotlin-process-", ".log", getCacheDir());
+        Process process = null;
+        try {
+            ProcessBuilder builder = new ProcessBuilder(command);
+            builder.directory(getFilesDir());
+            builder.redirectErrorStream(true);
+            builder.redirectOutput(outputFile);
+            java.util.Map<String, String> env = builder.environment();
+            env.put("JAVA_HOME", jdkHome.getAbsolutePath());
+            env.put("KOTLIN_HOME", getKotlinCompilerHome().getAbsolutePath());
+            env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
+            String jdkLib = new File(jdkHome, "lib").getAbsolutePath();
+            String server = new File(jdkHome, "lib/server").getAbsolutePath();
+            env.put("LD_LIBRARY_PATH", server + ":" + jdkLib + ":" + env.get("LD_LIBRARY_PATH"));
+            env.putAll(extraEnvironment);
+            try {
+                process = builder.start();
+            } catch (java.io.IOException directError) {
+                if (!isPermissionDenied(directError)) throw directError;
+                File linker = new File("/system/bin/linker64");
+                if (!linker.isFile()) throw directError;
+                List<String> linkerCommand = new ArrayList<>();
+                linkerCommand.add(linker.getAbsolutePath());
+                linkerCommand.addAll(command);
+                ProcessBuilder fallback = new ProcessBuilder(linkerCommand);
+                fallback.directory(getFilesDir());
+                fallback.redirectErrorStream(true);
+                fallback.redirectOutput(outputFile);
+                fallback.environment().putAll(env);
+                process = fallback.start();
+            }
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroy();
+                if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly();
+                String partial = outputFile.isFile() ? readText(outputFile) : "";
+                throw new IllegalStateException("Kotlin command timed out after " + timeoutSeconds +
+                        " seconds." + (partial.isEmpty() ? "" : "\n" + partial));
+            }
+            String output = outputFile.isFile() ? readText(outputFile) : "";
+            if (process.exitValue() != 0) {
+                throw new IllegalStateException("Kotlin JVM launcher exited with code " +
+                        process.exitValue() + ": " + output);
+            }
+            return output.trim();
+        } finally {
+            if (process != null && process.isAlive()) process.destroyForcibly();
+            if (outputFile.exists()) outputFile.delete();
+        }
+    }
+
+    private String kotlinProjectFingerprint(List<File> sources, String classpath) throws Exception {
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        java.util.Collections.sort(sources, (left, right) ->
+                left.getAbsolutePath().compareTo(right.getAbsolutePath()));
+        for (File source : sources) {
+            digest.update(source.getAbsolutePath().getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            try (InputStream in = new FileInputStream(source)) {
+                byte[] buffer = new byte[16 * 1024];
+                int count;
+                while ((count = in.read(buffer)) != -1) digest.update(buffer, 0, count);
+            }
+            digest.update((byte) 0);
+        }
+        digest.update(classpath.getBytes(StandardCharsets.UTF_8));
+        digest.update(getKotlinCompilerHome().getAbsolutePath().getBytes(StandardCharsets.UTF_8));
+        byte[] bytes = digest.digest();
+        StringBuilder result = new StringBuilder();
+        for (byte value : bytes) result.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
+        return result.toString();
+    }
+
+    private File ensureKotlinProjectBuilt(File compilerHome, List<File> sources,
+                                          String projectClasspath) throws Exception {
+        File buildDirectory = new File(getFilesDir(), "kotlin-build");
+        if (!buildDirectory.exists() && !buildDirectory.mkdirs()) {
+            throw new IllegalStateException("Cannot create Kotlin build folder: " + buildDirectory.getAbsolutePath());
+        }
+        File outputJar = new File(buildDirectory, "nice-kotlin-program.jar");
+        File fingerprintFile = new File(buildDirectory, "nice-kotlin-program.sha256");
+        String fingerprint = kotlinProjectFingerprint(new ArrayList<>(sources), projectClasspath);
+        if (outputJar.isFile() && outputJar.length() > 0 && fingerprintFile.isFile()
+                && fingerprint.equals(readText(fingerprintFile).trim())) {
+            return outputJar;
+        }
+
+        File temporaryJar = new File(buildDirectory, "nice-kotlin-program.tmp.jar");
+        if (temporaryJar.exists() && !temporaryJar.delete()) {
+            throw new IllegalStateException("Cannot remove stale Kotlin temporary output: " + temporaryJar.getAbsolutePath());
+        }
+        List<String> compilerArgs = new ArrayList<>();
+        compilerArgs.add("-kotlin-home");
+        compilerArgs.add(compilerHome.getAbsolutePath());
+        compilerArgs.add("-no-stdlib");
+        compilerArgs.add("-no-reflect");
+        compilerArgs.add("-include-runtime");
+        compilerArgs.add("-classpath");
+        compilerArgs.add(projectClasspath);
+        compilerArgs.add("-d");
+        compilerArgs.add(temporaryJar.getAbsolutePath());
+        for (File source : sources) compilerArgs.add(source.getAbsolutePath());
+
+        runKotlinJvm(compilerHome, 180, compilerArgs.toArray(new String[0]));
+        if (!temporaryJar.isFile() || temporaryJar.length() == 0) {
+            throw new IllegalStateException("Kotlin compiler completed without creating output JAR: " +
+                    temporaryJar.getAbsolutePath());
+        }
+        if (outputJar.exists() && !outputJar.delete()) {
+            throw new IllegalStateException("Cannot replace cached Kotlin JAR: " + outputJar.getAbsolutePath());
+        }
+        if (!temporaryJar.renameTo(outputJar)) {
+            throw new IllegalStateException("Cannot activate compiled Kotlin JAR: " + outputJar.getAbsolutePath());
+        }
+        writeText(fingerprintFile, fingerprint);
+        return outputJar;
     }
 
     private void runKotlinProject() {
@@ -1497,52 +1723,26 @@ public class MainActivity extends Activity {
                 }
                 ensureJavaLibrariesInstalled();
                 String projectLibraryClasspath = getJavaLibrariesClasspath();
-                setIdeStatus("Checking Kotlin compiler…");
                 File compilerHome = ensureKotlinCompilerInstalled();
-                File compilerLib = new File(compilerHome, "lib");
-                String compilerClassPath = new File(compilerLib, "*").getAbsolutePath();
                 String extension = getCurrentExtension();
                 if ("kts".equals(extension)) {
-                    setIdeStatus("Compiling and running Kotlin script…");
-                    String output = runJdkCommand(new File(jdkHome, "bin/java"), 120,
-                            "-cp", compilerClassPath,
-                            "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
-                            "-kotlin-home", compilerHome.getAbsolutePath(),
-                            "-classpath", projectLibraryClasspath,
-                            "-script", currentFile.getAbsolutePath());
+                    List<String> args = new ArrayList<>();
+                    args.add("-kotlin-home");
+                    args.add(compilerHome.getAbsolutePath());
+                    args.add("-classpath");
+                    args.add(projectLibraryClasspath);
+                    args.add("-script");
+                    args.add(currentFile.getAbsolutePath());
+                    String output = runKotlinJvm(compilerHome, 120, args.toArray(new String[0]));
                     success = true;
                     report = "KOTLIN SCRIPT SUCCESSFUL\n\n" +
                             (output.isEmpty() ? "(Script finished with no output)" : output);
                 } else {
-                    setIdeStatus("Checking Kotlin project build…");
                     List<File> sources = new ArrayList<>();
                     collectKotlinFiles(workspace, sources);
                     if (sources.isEmpty()) throw new IllegalStateException("No .kt source files found in Workspace.");
-                    File buildDirectory = new File(getFilesDir(), "kotlin-build");
-                    if (!buildDirectory.exists() && !buildDirectory.mkdirs()) {
-                        throw new IllegalStateException("Cannot create Kotlin build folder.");
-                    }
-                    File outputJar = new File(buildDirectory, "nice-kotlin-program.jar");
-                    if (outputJar.exists() && !outputJar.delete()) {
-                        throw new IllegalStateException("Cannot replace previous Kotlin build output.");
-                    }
-                    List<String> compilerArgs = new ArrayList<>();
-                    compilerArgs.add("-kotlin-home");
-                    compilerArgs.add(compilerHome.getAbsolutePath());
-                    compilerArgs.add("-include-runtime");
-                    compilerArgs.add("-classpath");
-                    compilerArgs.add(projectLibraryClasspath);
-                    compilerArgs.add("-d");
-                    compilerArgs.add(outputJar.getAbsolutePath());
-                    for (File source : sources) compilerArgs.add(source.getAbsolutePath());
-                    List<String> command = new ArrayList<>();
-                    command.add("-cp");
-                    command.add(compilerClassPath);
-                    command.add("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler");
-                    command.addAll(compilerArgs);
-                    setIdeStatus("Compiling Kotlin project…");
-                    runJdkCommand(new File(jdkHome, "bin/java"), 180, command.toArray(new String[0]));
-                    setIdeStatus("Kotlin compilation successful • starting program…");
+                    setIdeStatus("Building Kotlin project…");
+                    File outputJar = ensureKotlinProjectBuilt(compilerHome, sources, projectLibraryClasspath);
 
                     String sourceText = readText(currentFile);
                     java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
@@ -1552,12 +1752,16 @@ public class MainActivity extends Activity {
                     String fileName = currentFile.getName();
                     String className = fileName.substring(0, fileName.length() - 3) + "Kt";
                     String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
-                    setIdeStatus("Running Kotlin program…");
                     String output = runJdkCommand(new File(jdkHome, "bin/java"), 60,
                             "-Dfile.encoding=UTF-8", "-cp",
                             outputJar.getAbsolutePath() + File.pathSeparator + projectLibraryClasspath, mainClass);
                     success = true;
-                    report = cleanProgramOutput(output);
+                    report = "KOTLIN BUILD SUCCESSFUL\n" +
+                            sources.size() + " Kotlin source file(s) " +
+                            (new File(getFilesDir(), "kotlin-build/nice-kotlin-program.sha256").isFile()
+                                    ? "checked against build cache." : "compiled.") +
+                            "\n\nRUN: " + mainClass + "\n\n" +
+                            (output.isEmpty() ? "(Program finished with no output)" : output);
                 }
             } catch (Exception e) {
                 report = "KOTLIN BUILD / RUN FAILED\n\n" + e.getMessage();
