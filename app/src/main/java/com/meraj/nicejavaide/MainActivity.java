@@ -1155,10 +1155,20 @@ public class MainActivity extends Activity {
             try {
                 deleteTree(staging);
                 if (!staging.mkdirs()) throw new IllegalStateException("Cannot create JDK folder");
-                // Android's asset packaging exposes this .tar.gz source asset as
-                // jdk21-android.tar in the APK. Read that packaged name and detect
-                // gzip by its magic bytes instead of relying on the filename suffix.
-                try (InputStream raw = getAssets().open("jdk21-android.tar");
+                // The verified OpenJDK release asset is packaged under the exact
+                // .tar.gz filename. Keep a fallback for older APKs that used .tar.
+                InputStream assetStream;
+                try {
+                    assetStream = getAssets().open("jdk21-android-arm64.tar.gz");
+                } catch (java.io.IOException missingCurrentName) {
+                    try {
+                        assetStream = getAssets().open("jdk21-android.tar");
+                    } catch (java.io.IOException missingLegacyName) {
+                        missingLegacyName.addSuppressed(missingCurrentName);
+                        throw missingLegacyName;
+                    }
+                }
+                try (InputStream raw = assetStream;
                      java.io.BufferedInputStream buffered = new java.io.BufferedInputStream(raw)) {
                     buffered.mark(2);
                     int first = buffered.read();
