@@ -36,6 +36,33 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Diagnose packaged offline archive paths
+        run: |
+          echo '--- APK archive entries matching JDK/Kotlin ---'
+          unzip -Z1 app/build/outputs/apk/debug/app-debug.apk | grep -Ei 'jdk21|kotlin-compiler' || true
+          echo '--- source archive paths ---'
+          find app/src/main/assets app/build/generated -type f \( -name '*jdk21*' -o -name '*kotlin-compiler*' \) -printf '%p %s bytes\\n' 2>/dev/null || true
+
+      - name: Verify offline runtime archives are inside APK
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          apk = 'app/build/outputs/apk/debug/app-debug.apk'
+          required = {
+              'assets/jdk21-android.tar': 100 * 1024 * 1024,
+              'assets/kotlin-compiler-2.4.21.zip': 10 * 1024 * 1024,
+          }
+          with zipfile.ZipFile(apk) as z:
+              names = set(z.namelist())
+              for name, minimum in required.items():
+                  if name not in names:
+                      raise SystemExit(f'MISSING APK ASSET: {name}')
+                  size = z.getinfo(name).file_size
+                  if size < minimum:
+                      raise SystemExit(f'INVALID APK ASSET: {name} ({size} bytes)')
+                  print(f'APK asset verified: {name} ({size} bytes)')
+          PY
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

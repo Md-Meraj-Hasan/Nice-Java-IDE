@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Nice Java IDE</title><link rel="stylesheet" href="codemirror.min.css"><link rel="stylesheet" href="material-darker.min.css">
+<style>
+:root{color-scheme:light;--bg:#f2f5fa;--panel:#e7edf6;--panel2:#fff;--line:#cbd5e1;--txt:#182235;--muted:#526176;--blue:#3978f6;--green:#159b65}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--txt);font:14px system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden;touch-action:pan-x pan-y}
+.app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.header{height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:var(--panel2);border-bottom:1px solid var(--line);flex-shrink:0}
+.brand{font-size:18px;font-weight:750}.brand span{color:#70a2ff}.header-actions{display:flex;gap:8px}
+button{font:inherit;color:var(--txt);border:1px solid var(--line);background:var(--panel2);border-radius:7px;padding:8px 11px;min-height:36px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:active{filter:brightness(1.25)}button.run{background:#126b4b;border-color:#19865f;color:#fff;font-weight:700}
+.ribbon{height:38px;display:flex;align-items:stretch;gap:0;padding:0 5px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+.group{position:relative;display:flex;align-items:center;gap:3px;padding:3px 5px;border-right:1px solid #34435a;flex:0 0 auto}
+.group:last-child{border-right:0}.group-title{font-size:11px;letter-spacing:.2px;color:#526176;text-transform:none;padding:4px 8px;white-space:nowrap;border:1px solid #c4d2e4;border-radius:6px;background:#f8fbff;font-weight:700;min-height:30px}.group button.section-toggle{cursor:pointer;background:#f8fbff;border:1px solid #c4d2e4;color:#526176;font-weight:700;min-height:30px;padding:4px 8px;border-radius:6px}.group.expanded button.section-toggle{background:#c9dcf7;border-color:#8eb5ed;color:#173b70}.group:not(.expanded) button[data-action]{display:none}.group.expanded{background:#dce8f8}.group.expanded .section-toggle{background:#c9dcf7;border-color:#8eb5ed;color:#173b70}.tools-menu-btn{position:relative;z-index:3;min-height:34px!important;padding:5px 12px!important;border:1px solid #3978f6!important;border-radius:7px!important;background:#1b3154!important;color:#ffffff!important;font-size:13px!important;font-weight:700!important;letter-spacing:0!important;text-transform:none!important;pointer-events:auto!important;opacity:1!important}
+.group button{min-height:30px;padding:4px 8px;white-space:nowrap;border-color:transparent;background:transparent;font-size:13px}
+.filebar{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);flex-shrink:0;color:var(--muted)}
+.file-dot{width:8px;height:8px;border-radius:50%;background:#67a0ff}.file-name{font-weight:650;color:var(--txt)}
+.editor-wrap{flex:1;min-height:0;overflow:hidden;background:#ffffff}.CodeMirror{height:100%;font:14px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;background:#ffffff;color:#182235;touch-action:pan-x pan-y}.CodeMirror-gutters{background:#f1f5fb;border-right:1px solid #d5deea}.CodeMirror-linenumber{color:#78879b}.CodeMirror-lines{padding:12px 0}.CodeMirror pre{padding-left:5px}
+#fixed-toolbar{display:none;background:#dce3ed;border-top:1px solid #b9c5d4;padding:5px 7px;flex-shrink:0;user-select:none}
+body.editor-focused #fixed-toolbar{display:block}
+.symbol-row{display:flex;align-items:stretch;gap:5px;width:100%;min-width:0}.symbol-row+.symbol-row{margin-top:5px}
+.symbol-btn{display:block;flex:1 1 0;min-width:0;width:0;height:42px;min-height:42px;padding:2px 0;border:1px solid #c2ccd9;border-radius:7px;background:#e6e9ee;color:#25364d;font:15px ui-monospace,monospace;white-space:nowrap}
+.symbol-btn.prime-btn{background:#526d78;border-color:#465f69;color:#fff;font-weight:650}.symbol-btn.nav-btn{background:#34499b;border-color:#293d8c;color:#fff;font-weight:700}
+body.dark #fixed-toolbar{background:#111a2a;border-top-color:#26364d}body.dark .symbol-btn{background:#273449;color:#e6edf7;border-color:#3b4b63}body.dark .symbol-btn.prime-btn{background:#526d78;color:#fff;border-color:#465f69}body.dark .symbol-btn.nav-btn{background:#34499b;color:#fff;border-color:#293d8c}
+.status{height:24px;display:flex;align-items:center;padding:0 12px;color:#526176;font-size:11px;background:#e7edf6;border-top:1px solid #cbd5e1;flex-shrink:0}
+body.dark{color-scheme:dark;--bg:#090e18;--panel:#111a2a;--panel2:#172338;--line:#26364d;--txt:#e6edf7;--muted:#91a3bb}
+body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.dark .filebar{background:#101a2a;color:#91a3bb}body.dark .file-name{color:#d9e5f7}body.dark .editor-wrap,body.dark .CodeMirror,body.dark .CodeMirror-gutters{background:#151b25;color:#e4eaf4}body.dark .CodeMirror-gutters{border-right-color:#273246}body.dark .CodeMirror-linenumber{color:#64748b}body.dark #fixed-toolbar{background:#101a2a}body.dark .symbol-btn{background:#1b2940;color:#e6edf7;border-color:#30425d}body.dark .symbol-btn.prime-btn{background:#263c5d;color:#fff;border-color:#45648e}body.dark .group-title,body.dark .group button.section-toggle{background:#172338;color:#b9c8dc;border-color:#34435a}body.dark .group.expanded button.section-toggle{background:#263c5d;color:#fff;border-color:#3978f6}body.dark .group.expanded{background:#1b2940}body.light .header{background:#fff;color:#182235}body.light .ribbon{background:#e7edf6}body.light .filebar{background:#f1f5fb;color:#526176}body.light .file-name{color:#182235}body.light .editor-wrap,body.light .CodeMirror{background:#fff;color:#182235}body.light .CodeMirror-gutters{background:#f1f5fb}body.light #fixed-toolbar{background:#e8eef8}body.light .symbol-btn{background:#fff;color:#23344d;border-color:#c3cfdf}body.light .status{background:#e7edf6;color:#526176}
+</style></head><body class="light"><main class="app">
+<header class="header"><div class="brand">Nice<span>Java</span> IDE</div><div class="header-actions"><button id="themeBtn" aria-label="Theme">☼</button><button class="run" id="runBtn">▶ Run</button></div></header>
+<nav class="ribbon" aria-label="IDE tools">
+ <section class="group"><button type="button" class="group-title section-toggle" aria-expanded="false">File ▾</button><button data-action="new">＋ New</button><button data-action="open">Open</button><button data-action="save">Save</button><button data-action="saveas">Save As</button></section>
+ <section class="group"><button type="button" class="group-title section-toggle" aria-expanded="false">Edit ▾</button><button data-action="undo">↶</button><button data-action="redo">↷</button><button data-action="find">Find</button></section>
+ <section class="group"><button type="button" class="group-title section-toggle" aria-expanded="false">Project ▾</button><button data-action="files">Files</button><button data-action="folders">Folders</button><button data-action="kotlin">Kotlin</button></section>
+ <section class="group"><button type="button" id="toolsBtn" class="tools-menu-btn" aria-label="Open Tools menu">Tools ▾</button><button type="button" class="group-title section-toggle" aria-expanded="false">Runtime ▾</button><button data-action="jdk">JDK</button><button data-action="libs">Libraries</button></section>
+</nav>
+<div class="filebar"><span class="file-dot"></span><span class="file-name" id="fileName">Main.java</span><select id="languageSelect" aria-label="Editor language" style="margin-left:auto;max-width:145px;padding:5px 7px;border:1px solid #8da4c2;border-radius:6px;background:#f8fbff;color:#24344d;font-size:12px;font-weight:700"><option value="java">Java</option><option value="kotlin">Kotlin</option><option value="html">HTML</option><option value="css">CSS</option><option value="js">JavaScript</option></select><span id="fileType" style="color:#8094b0;margin-left:7px">JAVA</span></div>
+<div class="editor-wrap" id="editorWrap"><textarea id="source"></textarea></div>
+<div id="fixed-toolbar" aria-label="NiceCoding coding keys">
+ <div class="symbol-row">
+  <button class="symbol-btn prime-btn" data-key="tab">TAB</button><button class="symbol-btn prime-btn" data-insert="=">=</button><button class="symbol-btn nav-btn" data-move="up">▲</button><button class="symbol-btn" data-insert="_">_</button><button class="symbol-btn" data-insert="''">' '</button><button class="symbol-btn" data-pair="&quot;&quot;">" "</button><button class="symbol-btn" data-pair="()">()</button><button class="symbol-btn" data-pair="[]">[]</button><button class="symbol-btn" data-pair="{}">{}</button><button class="symbol-btn" data-insert=":">:</button>
+ </div>
+ <div class="symbol-row">
+  <button class="symbol-btn nav-btn" data-move="left">◀</button><button class="symbol-btn nav-btn" data-move="right">▶</button><button class="symbol-btn nav-btn" data-move="down">▼</button><button class="symbol-btn" data-insert="&lt;">&lt;</button><button class="symbol-btn" data-insert="&gt;">&gt;</button><button class="symbol-btn" data-insert="+">+</button><button class="symbol-btn" data-insert="-">-</button><button class="symbol-btn" data-insert="*">*</button><button class="symbol-btn" data-insert="/">/</button><button class="symbol-btn" data-insert=";">;</button>
+ </div>
+</div>
+<footer class="status" id="status">Ready • Offline editor</footer></main>
+<script src="codemirror.min.js"></script><script>
+(function(){
+ const status=document.getElementById('status'), source=document.getElementById('source');
+ function report(s){status.textContent=s}
+ window.setIdeStatus=function(s){report(s)}
+ function nativeCall(method){try{if(!window.NativeIDE||typeof window.NativeIDE[method]!=='function'){report('Android bridge unavailable • reload app');return false}window.NativeIDE[method]();return true}catch(e){report('Action error: '+e.message);return false}}
+ if(!window.CodeMirror){report('Editor library failed to load');return}
+ CodeMirror.defineMode('nicejava',function(){return{startState:function(){return{comment:false,str:null}},token:function(s,st){if(s.eatSpace())return null;if(st.comment){if(s.skipTo('*/')){s.match('*/');st.comment=false}else s.skipToEnd();return 'comment'}if(st.str){while(!s.eol()){let c=s.next();if(c===st.str){st.str=null;break}if(c==='\\')s.next()}return 'string'}if(s.match('//')){s.skipToEnd();return 'comment'}if(s.match('/*')){st.comment=true;return 'comment'}if(s.match(/^"(?:[^"\\]|\\.)*"|^\x27(?:[^\x27\\]|\\.)*\x27/))return 'string';if(s.match(/^(?:package|import|public|private|protected|static|final|class|interface|enum|extends|implements|void|int|long|double|float|boolean|char|byte|short|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|throws|this|super|var|record)\b/))return 'keyword';if(s.match(/^(?:true|false|null)\b/))return 'atom';if(s.match(/^\d+(?:\.\d+)?[fFdDlL]?/))return 'number';if(s.match(/^[A-Z][\w$]*/))return 'type';if(s.match(/^[A-Za-z_$][\w$]*(?=\s*\()/))return 'def';s.next();return null}}});
+ CodeMirror.defineMode('nicekotlin',function(){return{startState:function(){return{block:false}},token:function(s,st){
+  if(s.eatSpace())return null;
+  if(st.block){if(s.skipTo('*/')){s.match('*/');st.block=false}else s.skipToEnd();return 'comment'}
+  if(s.match('//')){s.skipToEnd();return 'comment'}
+  if(s.match('/*')){st.block=true;return 'comment'}
+  if(s.match(/^"[^"]*"/)||s.match(/^'[^']*'/))return 'string';
+  if(s.match(/^(?:package|import|class|object|interface|fun|val|var|if|else|when|for|while|do|return|break|continue|try|catch|finally|throw|is|in|as|this|super|override|public|private|protected|internal|open|final|abstract|data|sealed|enum|companion|suspend|inline|const|lateinit|constructor|typealias)(?=[ \t({])/))return 'keyword';
+  if(s.match(/^(?:true|false|null)(?=[ \t,;)}])/))return 'atom';
+  if(s.match(/^\d+(?:\.\d+)?/))return 'number';
+  if(s.match(/^[A-Z][A-Za-z0-9_$]*/))return 'type';
+  if(s.match(/^[A-Za-z_$][A-Za-z0-9_$]*/))return 'variable';
+  s.next();return null
+}}});
+ CodeMirror.defineMode('nicejs',function(){return{startState:function(){return{block:false}},token:function(s,st){if(s.eatSpace())return null;if(st.block){if(s.skipTo('*/')){s.match('*/');st.block=false}else s.skipToEnd();return 'comment'}if(s.match('//')){s.skipToEnd();return 'comment'}if(s.match('/*')){st.block=true;return 'comment'}if(s.match(/^\x27(?:[^\x27\\]|\\.)*\x27|^"(?:[^"\\]|\\.)*"|^\x60(?:[^\x60\\]|\\.)*\x60/))return 'string';if(s.match(/^(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|new|class|extends|this|async|await|try|catch|throw|import|export|from|default|true|false|null|undefined)\b/))return 'keyword';if(s.match(/^\d+(?:\.\d+)?/))return 'number';if(s.match(/^[A-Z][\w$]*/))return 'type';if(s.match(/^[A-Za-z_$][\w$]*(?=\s*\()/))return 'def';s.next();return null}}});
+ CodeMirror.defineMode('nicecss',function(){return{startState:function(){return{block:false}},token:function(s,st){if(s.eatSpace())return null;if(st.block){if(s.skipTo('*/')){s.match('*/');st.block=false}else s.skipToEnd();return 'comment'}if(s.match('/*')){st.block=true;return 'comment'}if(s.match(/^"(?:[^"\\]|\\.)*"|^\x27(?:[^\x27\\]|\\.)*\x27/))return 'string';if(s.match(/^[.#]?[A-Za-z_-][\w-]*(?=\s*\{)/))return 'tag';if(s.match(/^[A-Za-z-]+(?=\s*:)/))return 'property';if(s.match(/^#[0-9a-fA-F]{3,8}\b/))return 'number';if(s.match(/^\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw)?/))return 'number';s.next();return null}}});
+ CodeMirror.defineMode('nicehtml',function(){return{startState:function(){return{comment:false,tag:false}},token:function(s,st){if(s.eatSpace())return null;if(st.comment){if(s.skipTo('-->')){s.match('-->');st.comment=false}else s.skipToEnd();return 'comment'}if(s.match('<!--')){st.comment=true;return 'comment'}if(s.match(/^<![^>]*>/))return 'meta';if(s.match(/^<\/?[A-Za-z][\w:-]*/)){st.tag=true;return 'tag'}if(st.tag&&s.match(/^>/)){st.tag=false;return 'tag'}if(st.tag&&s.match(/^\/>/)){st.tag=false;return 'tag'}if(st.tag&&s.match(/^[A-Za-z_:][\w:.-]*/))return 'attribute';if(s.match(/^"(?:[^"\\]|\\.)*"|^\x27(?:[^\x27\\]|\\.)*\x27/))return 'string';s.next();return null}}});
+ let editor;
+ try{
+  editor=CodeMirror.fromTextArea(source,{mode:'nicejava',theme:'default',lineNumbers:true,indentUnit:4,tabSize:4,indentWithTabs:false,lineWrapping:false,viewportMargin:30});
+  let initial='public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Nice Java IDE!");\n    }\n}\n';
+  if(window.NativeIDE&&typeof NativeIDE.initialCode==='function')initial=NativeIDE.initialCode()||initial;
+  editor.setValue(initial);
+  if(window.NativeIDE&&typeof NativeIDE.fileName==='function')document.getElementById('fileName').textContent=NativeIDE.fileName()||'Main.java';
+ }catch(e){report('Editor startup error: '+e.message);return}
+ function sync(){try{if(window.NativeIDE&&typeof NativeIDE.changed==='function')NativeIDE.changed(editor.getValue())}catch(e){report('Sync error: '+e.message)}}
+ window.setEditorCode=function(v){editor.setValue(v||'');editor.refresh()};
+ window.setFileName=function(v){
+  const name=v||'Main.java';
+  document.getElementById('fileName').textContent=name;
+  const ext=name.toLowerCase().split('.').pop();
+  const modes={java:'nicejava',kt:'nicekotlin',kts:'nicekotlin',js:'nicejs',mjs:'nicejs',cjs:'nicejs',css:'nicecss',html:'nicehtml',htm:'nicehtml'};
+  const labels={java:'JAVA',kt:'KOTLIN',kts:'KOTLIN SCRIPT',js:'JAVASCRIPT',mjs:'JAVASCRIPT',cjs:'JAVASCRIPT',css:'CSS',html:'HTML',htm:'HTML',json:'JSON',xml:'XML',md:'MARKDOWN',txt:'TEXT',py:'PYTHON'};
+  document.getElementById('fileType').textContent=labels[ext]||ext.toUpperCase();
+  const selector=document.getElementById('languageSelect'); if(selector){const selected=({kt:'kotlin',kts:'kotlin',java:'java',html:'html',htm:'html',css:'css',js:'js'})[ext]; if(selected)selector.value=selected;}
+  editor.setOption('mode',modes[ext]||'text/plain');
+  editor.refresh();
+ };
+  const languageSelect=document.getElementById('languageSelect');
+ const languageInfo={
+  java:{mode:'nicejava',label:'JAVA',name:'Main.java',sample:'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Nice Java IDE!");\n    }\n}\n'},
+  kotlin:{mode:'nicekotlin',label:'KOTLIN',name:'Main.kt',sample:'fun main() {\n    println(\"Hello from Nice Kotlin IDE!\")\n}\n'},
+  html:{mode:'nicehtml',label:'HTML',name:'index.html',sample:'<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <title>My Page</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Hello World</h1>\n  <script src="script.js"><\\/script>\n</body>\n</html>\n'},
+  css:{mode:'nicecss',label:'CSS',name:'style.css',sample:'body {\n  margin: 0;\n  font-family: Arial, sans-serif;\n}\n'},
+  js:{mode:'nicejs',label:'JAVASCRIPT',name:'script.js',sample:'function greet() {\n  console.log("Hello World");\n}\n\ngreet();\n'}
+ };
+ languageSelect.addEventListener('change',function(){
+  const info=languageInfo[this.value];
+  editor.setOption('mode',info.mode);
+  document.getElementById('fileName').textContent=info.name;
+  document.getElementById('fileType').textContent=info.label;
+  editor.setValue(info.sample);
+  editor.refresh();
+  editor.focus();
+  report(info.label+' editor selected • use Save As and keep '+info.name);
+ });
+ editor.on('change',sync);
+ editor.on('focus',function(){document.body.classList.add('editor-focused')});
+ editor.on('blur',function(){setTimeout(function(){if(!document.activeElement||!document.activeElement.closest('#fixed-toolbar'))document.body.classList.remove('editor-focused')},180)});
+ function insert(v,pair){let cur=editor.getCursor();editor.replaceSelection(v,'end');if(pair)editor.setCursor({line:cur.line,ch:cur.ch+1});editor.focus()}
+ document.querySelectorAll('[data-insert]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();insert(b.getAttribute('data-insert'))}));
+ document.querySelectorAll('[data-pair]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();insert(b.getAttribute('data-pair'),true)}));
+ document.querySelectorAll('[data-move]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();const d=b.dataset.move;editor.focus();editor.execCommand(({up:'goLineUp',down:'goLineDown',left:'goCharLeft',right:'goCharRight'})[d])}));
+ document.querySelector('[data-key="tab"]').addEventListener('pointerdown',e=>{e.preventDefault();insert('    ')});
+ document.querySelectorAll('.section-toggle').forEach(toggle=>toggle.addEventListener('click',()=>{
+  const group=toggle.closest('.group');
+  const willOpen=!group.classList.contains('expanded');
+  document.querySelectorAll('.ribbon .group').forEach(g=>{g.classList.remove('expanded');const t=g.querySelector('.section-toggle');if(t)t.setAttribute('aria-expanded','false')});
+  if(willOpen){group.classList.add('expanded');toggle.setAttribute('aria-expanded','true')}
+ }));
+ document.getElementById('toolsBtn').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();report('Opening Tools menu…');nativeCall('tools')});
+ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;const map={new:'newFile',open:'open',save:'save',saveas:'saveAs',files:'files',folders:'setupFolders',kotlin:'newKotlin',jdk:'installJdk',libs:'installLibraries'};if(a==='undo'){editor.undo();return}if(a==='redo'){editor.redo();return}if(a==='find'){let q=prompt('Find text');if(q){let at=editor.getValue().indexOf(q);if(at>=0){editor.setSelection(editor.posFromIndex(at),editor.posFromIndex(at+q.length));editor.focus()}else report('Text not found')}return}if(a==='save'||a==='saveas'||a==='new'||a==='open')sync();nativeCall(map[a])}));
+ document.getElementById('runBtn').addEventListener('click',()=>{sync();report('Compiling and running…');nativeCall('run')});
+ document.getElementById('themeBtn').addEventListener('click',()=>{document.body.classList.toggle('dark');document.body.classList.toggle('light');editor.setOption('theme',document.body.classList.contains('dark')?'material-darker':'default')});
+ document.addEventListener('focusin',e=>{if(e.target.closest('.CodeMirror'))document.body.classList.add('editor-focused')});
+ document.addEventListener('focusout',e=>{if(e.target.closest('.CodeMirror'))setTimeout(()=>{if(!document.activeElement.closest('#fixed-toolbar'))document.body.classList.remove('editor-focused')},250)});
+ window.addEventListener('error',e=>report('JS error: '+(e.message||'unknown')));
+ editor.refresh();report('Ready • Offline editor');
+})();
+</script></body></html>
