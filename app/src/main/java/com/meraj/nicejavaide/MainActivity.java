@@ -1231,7 +1231,11 @@ public class MainActivity extends Activity {
                     byte[] buffer = new byte[64 * 1024];
                     while ((entry = tar.getNextTarEntry()) != null) {
                         String entryName = entry.getName();
-                        String safeEntryName = normalizeArchiveEntryName(entryName);
+                        // Treat the extraction staging folder as the archive's parent root.
+                        // Some JDK tar entries intentionally use one leading-directory
+                        // traversal (for example lib/../../support/...). Resolve that
+                        // traversal inside staging, never outside it.
+                        String safeEntryName = normalizeArchiveEntryName("root/" + entryName);
                         File output = new File(staging, safeEntryName).getAbsoluteFile();
                         String base = staging.getCanonicalPath() + File.separator;
                         String canonicalOutput = output.getCanonicalPath();
