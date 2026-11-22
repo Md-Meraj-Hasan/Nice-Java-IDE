@@ -1327,8 +1327,8 @@ public class MainActivity extends Activity {
     // entry that attempts to escape the extraction root or uses an absolute path.
     private String normalizeArchiveEntryName(String name) throws SecurityException {
         if (name == null || name.isEmpty()) throw new SecurityException("Empty path in JDK archive");
-        String value = name.replace('\\\\', '/');
-        if (value.startsWith("/") || value.matches("^[A-Za-z]:.*") || value.indexOf('\\0') >= 0) {
+        String value = name.replace('\\', '/');
+        if (value.startsWith("/") || value.matches("^[A-Za-z]:.*") || value.indexOf('\0') >= 0) {
             throw new SecurityException("Unsafe absolute path in JDK archive: " + name);
         }
         java.util.ArrayDeque<String> parts = new java.util.ArrayDeque<>();
