@@ -3,6 +3,13 @@ plugins {
 }
 
 android {
+    ndkVersion '27.2.12479018'
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
     // Keep the downloaded JDK/Kotlin archives under the standard APK assets/ namespace.
     sourceSets.main.assets.srcDir(layout.projectDirectory.dir('src/main/assets'))
     sourceSets.main.jniLibs.srcDir(layout.buildDirectory.dir('generated/jniLibs'))
