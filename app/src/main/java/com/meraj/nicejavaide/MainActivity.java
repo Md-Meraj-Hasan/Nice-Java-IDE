@@ -1432,13 +1432,30 @@ public class MainActivity extends Activity {
             web.setWebViewClient(new android.webkit.WebViewClient());
             web.setWebChromeClient(new android.webkit.WebChromeClient());
 
-            android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
-                    .setTitle("Web Preview • " + htmlFile.getName())
-                    .setView(web)
-                    .setPositiveButton("Close", null)
-                    .create();
+            // Minimal preview chrome: no title or footer text, only a top-right close icon.
+            android.app.Dialog dialog = new android.app.Dialog(this);
+            android.widget.FrameLayout previewRoot = new android.widget.FrameLayout(this);
+            previewRoot.setBackgroundColor(android.graphics.Color.WHITE);
+            previewRoot.addView(web, new android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+
+            android.widget.TextView close = new android.widget.TextView(this);
+            close.setText("×");
+            close.setTextSize(30);
+            close.setTextColor(0xFF202124);
+            close.setGravity(android.view.Gravity.CENTER);
+            close.setBackground(makePreviewCloseBackground());
+            android.widget.FrameLayout.LayoutParams closeParams = new android.widget.FrameLayout.LayoutParams(
+                    dp(44), dp(44), android.view.Gravity.TOP | android.view.Gravity.END);
+            closeParams.setMargins(0, dp(6), dp(6), 0);
+            previewRoot.addView(close, closeParams);
+            close.setOnClickListener(v -> dialog.dismiss());
+
+            dialog.setContentView(previewRoot);
             dialog.setOnDismissListener(d -> web.destroy());
             dialog.show();
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
             dialog.getWindow().setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT,
                     android.view.WindowManager.LayoutParams.MATCH_PARENT);
 
@@ -1452,6 +1469,14 @@ public class MainActivity extends Activity {
     }
 
 
+    private android.graphics.drawable.Drawable makePreviewCloseBackground() {
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        shape.setColor(0xEFFFFFFF);
+        shape.setStroke(dp(1), 0x22000000);
+        return shape;
+    }
+
     private File getKotlinCompilerHome() {
         return new File(getFilesDir(), "kotlin-compiler/kotlinc");
     }
@@ -1464,7 +1489,7 @@ public class MainActivity extends Activity {
         File home = getKotlinCompilerHome();
         String[] required = {
                 "kotlin-compiler.jar", "kotlin-stdlib.jar", "kotlin-script-runtime.jar",
-                "kotlin-reflect.jar", "kotlin-daemon.jar", "trove4j.jar"
+                "kotlin-reflect.jar", "kotlin-daemon.jar"
         };
         for (String name : required) {
             File file = new File(home, "lib/" + name);
