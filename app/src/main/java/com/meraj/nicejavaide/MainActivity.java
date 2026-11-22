@@ -854,15 +854,20 @@ public class MainActivity extends Activity {
     }
 
     private void saveCurrentBeforeSwitch() throws Exception {
+        String editorText = editor.getText().toString();
         if (currentUri != null) {
-            writeUri(currentUri, editor.getText().toString());
+            String existing = readUri(currentUri);
+            if (!editorText.equals(existing)) writeUri(currentUri, editorText);
         } else if (currentFile != null) {
-            writeText(currentFile, editor.getText().toString());
-            String treeText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null);
-            String javaText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("java_folder", null);
-            String webText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("web_folder", null);
-            if (treeText != null && javaText != null && webText != null) {
-                syncFileToSaf(currentFile, Uri.parse(treeText), Uri.parse(javaText), Uri.parse(webText));
+            String existing = currentFile.isFile() ? readText(currentFile) : null;
+            if (!editorText.equals(existing)) {
+                writeText(currentFile, editorText);
+                String treeText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null);
+                String javaText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("java_folder", null);
+                String webText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("web_folder", null);
+                if (treeText != null && javaText != null && webText != null) {
+                    syncFileToSaf(currentFile, Uri.parse(treeText), Uri.parse(javaText), Uri.parse(webText));
+                }
             }
         }
     }
@@ -1961,7 +1966,17 @@ public class MainActivity extends Activity {
         MessageDigest digest = MessageDigest.getInstance("SHA-256"); byte[] buffer = new byte[32768];
         for (File file : inputs) {
             digest.update(file.getAbsolutePath().getBytes(StandardCharsets.UTF_8));
-            try (InputStream in = new FileInputStream(file)) { int n; while ((n = in.read(buffer)) != -1) digest.update(buffer, 0, n); }
+            String lower = file.getName().toLowerCase(java.util.Locale.ROOT);
+            if (lower.endsWith(".jar")) {
+                // Bundled dependency JARs are immutable after installation.
+                // Metadata avoids re-reading hundreds of MB on every Run.
+                digest.update(Long.toString(file.length()).getBytes(StandardCharsets.UTF_8));
+                digest.update(Long.toString(file.lastModified()).getBytes(StandardCharsets.UTF_8));
+            } else {
+                try (InputStream in = new FileInputStream(file)) {
+                    int n; while ((n = in.read(buffer)) != -1) digest.update(buffer, 0, n);
+                }
+            }
         }
         StringBuilder hex = new StringBuilder();
         for (byte value : digest.digest()) hex.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
