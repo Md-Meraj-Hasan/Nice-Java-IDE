@@ -272,6 +272,15 @@ public class MainActivity extends Activity {
                     currentFile = target;
                     currentUri = null;
                     writeText(currentFile, code == null ? "" : code);
+                    if (ext.equals("css") || ext.equals("js")) {
+                        File htmlEntry = new File(workspace, "index.html");
+                        if (!htmlEntry.isFile()) {
+                            String html = "<!doctype html>\\n<html><head><meta charset=\\\"UTF-8\\\"><title>Nice Web Project</title>" +
+                                    "<link rel=\\\"stylesheet\\\" href=\\\"style.css\\\"></head><body>" +
+                                    "<h1>Hello Web!</h1><script src=\\\"script.js\\\"></script></body></html>\\n";
+                            writeText(htmlEntry, html);
+                        }
+                    }
                     addOpenTab(currentFile);
                     setEditorText(code == null ? "" : code);
                     updateFileLabel();
