@@ -1,6 +1,8 @@
 package com.meraj.nicejavaide;
 
-import android.app.Activity;
+import androidx.activity.ComponentActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import android.content.Intent;
 import android.net.Uri;
 import android.database.Cursor;
@@ -43,7 +45,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 
-public class MainActivity extends Activity {
+public class MainActivity extends ComponentActivity {
     private static final int REQUEST_OPEN = 101;
     private static final int REQUEST_SAVE_AS = 102;
     private static final int REQUEST_WORKSPACE_TREE = 103;
@@ -69,6 +71,10 @@ public class MainActivity extends Activity {
     private boolean restoringEditor = false;
     private static final int HISTORY_LIMIT = 100;
     private File jdkHome;
+    private int pendingPickerRequest;
+    private final ActivityResultLauncher<Intent> documentPicker = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result ->
+                    handleActivityResult(result.getResultCode(), result.getData()));
 
     @Override
     protected void onCreate(Bundle state) {
@@ -576,7 +582,8 @@ public class MainActivity extends Activity {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         intent.putExtra("android.content.extra.SHOW_ADVANCED", true);
-        startActivityForResult(intent, REQUEST_WORKSPACE_TREE);
+        pendingPickerRequest = REQUEST_WORKSPACE_TREE;
+        documentPicker.launch(intent);
     }
 
     private Uri findOrCreateFolder(Uri tree, Uri parent, String name) throws Exception {
@@ -877,7 +884,8 @@ public class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/html", "text/css", "application/javascript", "text/javascript", "text/x-java", "text/plain", "application/json", "application/xml", "application/octet-stream"});
-        startActivityForResult(intent, REQUEST_OPEN);
+        pendingPickerRequest = REQUEST_OPEN;
+        documentPicker.launch(intent);
     }
 
     private void saveAs() {
@@ -885,12 +893,13 @@ public class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("text/x-java");
         intent.putExtra(Intent.EXTRA_TITLE, currentFile == null ? "Main.java" : currentFile.getName());
-        startActivityForResult(intent, REQUEST_SAVE_AS);
+        pendingPickerRequest = REQUEST_SAVE_AS;
+        documentPicker.launch(intent);
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+    private void handleActivityResult(int resultCode, Intent data) {
+        int requestCode = pendingPickerRequest;
+        pendingPickerRequest = 0;
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         if (requestCode == REQUEST_WORKSPACE_TREE) {
