@@ -191,6 +191,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> { if (status != null) status.setText(message == null ? "" : message); });
         }
 
+        @android.webkit.JavascriptInterface
         public void run() {
             runOnUiThread(() -> {
                 try {
