@@ -1776,6 +1776,37 @@ public class MainActivity extends Activity {
         return outputJar;
     }
 
+
+    private String findKotlinMainClass(File outputJar, String preferredClass) throws Exception {
+        // Prefer the file-facade class derived from the active Kotlin filename.
+        List<String> candidates = new ArrayList<>();
+        if (preferredClass != null && !preferredClass.isEmpty()) candidates.add(preferredClass);
+
+        // Inspect the compiled JAR and ask javap which class actually exposes main(String[]).
+        try (java.util.jar.JarFile jar = new java.util.jar.JarFile(outputJar)) {
+            java.util.Enumeration<java.util.jar.JarEntry> entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                java.util.jar.JarEntry entry = entries.nextElement();
+                String name = entry.getName();
+                if (!entry.isDirectory() && name.endsWith("Kt.class") && !name.contains("$")) {
+                    String className = name.substring(0, name.length() - 6).replace('/', '.');
+                    if (!candidates.contains(className)) candidates.add(className);
+                }
+            }
+        }
+        File javap = new File(jdkHome, "bin/javap");
+        if (!javap.isFile()) throw new IllegalStateException("JDK javap tool is missing; cannot locate Kotlin main() class.");
+        for (String candidate : candidates) {
+            try {
+                String details = runJdkCommand(javap, 30, "-classpath", outputJar.getAbsolutePath(), "-public", candidate);
+                if (details.matches("(?s).*\\bmain\\(java\\.lang\\.String\\[\\]\\).*")) return candidate;
+            } catch (Exception ignored) {
+                // This candidate may not exist in the JAR; continue with the next compiled file facade.
+            }
+        }
+        throw new IllegalStateException("Kotlin compilation succeeded, but no generated class with main(String[]) was found in " + outputJar.getAbsolutePath());
+    }
+
     private void runKotlinProject() {
         if (!isJdkInstalled()) {
             new android.app.AlertDialog.Builder(this)
@@ -1824,7 +1855,8 @@ public class MainActivity extends Activity {
                     String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
                     String fileName = currentFile.getName();
                     String className = fileName.substring(0, fileName.length() - 3) + "Kt";
-                    String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
+                    String preferredClass = packageName.isEmpty() ? className : packageName + "." + className;
+                    String mainClass = findKotlinMainClass(outputJar, preferredClass);
                     String output = runJdkCommand(new File(jdkHome, "bin/java"), 60,
                             "-Dfile.encoding=UTF-8", "-cp",
                             outputJar.getAbsolutePath() + File.pathSeparator + projectLibraryClasspath, mainClass);
