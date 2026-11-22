@@ -1502,7 +1502,7 @@ public class MainActivity extends Activity {
     private void validateKotlinCompilerHome(File home) throws Exception {
         String[] required = {
                 "kotlin-compiler.jar", "kotlin-stdlib.jar", "kotlin-script-runtime.jar",
-                "kotlin-reflect.jar", "kotlin-daemon.jar", "trove4j.jar"
+                "kotlin-reflect.jar", "kotlin-daemon.jar"
         };
         for (String name : required) {
             File file = new File(home, "lib/" + name);
