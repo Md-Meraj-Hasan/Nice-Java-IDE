@@ -1245,7 +1245,7 @@ public class MainActivity extends Activity {
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create link folder");
                             String linkName = entry.getLinkName();
                             if (linkName == null || linkName.isEmpty() || linkName.startsWith("/") ||
-                                    linkName.matches("^[A-Za-z]:.*") || linkName.indexOf('\\0') >= 0) {
+                                    linkName.matches("^[A-Za-z]:.*") || linkName.indexOf((char) 0) >= 0) {
                                 throw new SecurityException("Unsafe symlink target in JDK archive: " + entryName + " -> " + linkName);
                             }
                             String parentRelative = staging.toPath().relativize(parent.toPath()).toString();
