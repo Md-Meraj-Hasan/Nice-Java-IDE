@@ -134,7 +134,7 @@ tasks.register('downloadKotlinCompiler') {
 
 def jdkArchive = layout.projectDirectory.file('src/main/assets/jdk21-android.tar.gz')
 def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.14/jdk21-android-arm64.tar.gz'
-def jdkSha256 = 'b6575760724183350c98206082da7829808b62b766e2d30fc253101b1e8cda0e'
+def jdkSha256 = '8746f96a348c34b1e21508128478cb613de05f9d0aa9befad2967f83a9542680'
 
 def jdkLauncherOutput = layout.buildDirectory.dir('generated/jniLibs/arm64-v8a')
 
