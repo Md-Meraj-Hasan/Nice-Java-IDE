@@ -252,6 +252,35 @@ public class MainActivity extends Activity {
         public void newKotlin() {
             runOnUiThread(() -> promptNewKotlinFile());
         }
+
+        @android.webkit.JavascriptInterface
+        public void selectLanguage(String extension, String code) {
+            runOnUiThread(() -> {
+                try {
+                    saveCurrentBeforeSwitch();
+                    String ext = extension == null ? "" : extension.toLowerCase(java.util.Locale.ROOT);
+                    if (!ext.matches("java|kt|html|css|js")) {
+                        throw new IllegalArgumentException("Unsupported editor language: " + ext);
+                    }
+                    String base = ext.equals("java") || ext.equals("kt") ? "Main" :
+                            ext.equals("html") ? "index" : ext.equals("css") ? "style" : "script";
+                    File target = new File(workspace, base + "." + ext);
+                    int suffix = 2;
+                    while (target.exists() && !target.equals(currentFile)) {
+                        target = new File(workspace, base + "-" + suffix++ + "." + ext);
+                    }
+                    currentFile = target;
+                    currentUri = null;
+                    writeText(currentFile, code == null ? "" : code);
+                    addOpenTab(currentFile);
+                    setEditorText(code == null ? "" : code);
+                    updateFileLabel();
+                    status.setText(ext.toUpperCase(java.util.Locale.ROOT) + " editor ready • " + currentFile.getName());
+                } catch (Exception e) {
+                    status.setText("Language switch error: " + e.getMessage());
+                }
+            });
+        }
     }
 
     private void setEditorText(String value) {
