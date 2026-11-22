@@ -99,13 +99,19 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
  };
  languageSelect.addEventListener('change',function(){
   const info=languageInfo[this.value];
-  editor.setOption('mode',info.mode);
-  document.getElementById('fileName').textContent=info.name;
-  document.getElementById('fileType').textContent=info.label;
-  editor.setValue(info.sample);
-  editor.refresh();
-  editor.focus();
-  report(info.label+' editor selected • use Save As and keep '+info.name);
+  try{
+   if(!window.NativeIDE||typeof NativeIDE.selectLanguage!=='function'){
+    report('Android language bridge unavailable • reload app');return;
+   }
+   NativeIDE.selectLanguage(info.name.split('.').pop(),info.sample);
+   editor.setOption('mode',info.mode);
+   document.getElementById('fileName').textContent=info.name;
+   document.getElementById('fileType').textContent=info.label;
+   editor.setValue(info.sample);
+   editor.refresh();
+   editor.focus();
+   report(info.label+' editor selected • '+info.name);
+  }catch(e){report('Language switch error: '+e.message)}
  });
  editor.on('change',sync);
  editor.on('focus',function(){document.body.classList.add('editor-focused')});
