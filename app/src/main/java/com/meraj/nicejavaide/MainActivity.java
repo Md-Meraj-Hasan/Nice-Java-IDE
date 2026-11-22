@@ -1243,9 +1243,18 @@ public class MainActivity extends Activity {
                         } else if (entry.isSymbolicLink()) {
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create link folder");
-                            File resolvedTarget = new File(parent, entry.getLinkName()).getCanonicalFile();
-                            if (!resolvedTarget.getPath().startsWith(staging.getCanonicalPath() + File.separator)) throw new SecurityException("Unsafe symlink in JDK archive");
-                            android.system.Os.symlink(entry.getLinkName(), output.getAbsolutePath());
+                            String linkName = entry.getLinkName();
+                            if (linkName == null || linkName.isEmpty() || linkName.startsWith("/") ||
+                                    linkName.matches("^[A-Za-z]:.*") || linkName.indexOf('\\0') >= 0) {
+                                throw new SecurityException("Unsafe symlink target in JDK archive: " + entryName + " -> " + linkName);
+                            }
+                            String parentRelative = staging.toPath().relativize(parent.toPath()).toString();
+                            String combinedTarget = parentRelative.isEmpty() ? linkName : parentRelative + "/" + linkName;
+                            // Validate the target lexically relative to the link's parent.
+                            // Canonical resolution is incorrect here because valid JDK links
+                            // may point through another symlink that has not been extracted yet.
+                            normalizeArchiveEntryName(combinedTarget);
+                            android.system.Os.symlink(linkName, output.getAbsolutePath());
                         } else if (entry.isLink()) {
                             File target = new File(staging, entry.getLinkName()).getCanonicalFile();
                             if (!target.getPath().startsWith(staging.getCanonicalPath() + File.separator) || !target.exists()) throw new SecurityException("Unsafe or missing hardlink target");
