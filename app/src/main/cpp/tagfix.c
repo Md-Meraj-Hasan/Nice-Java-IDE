@@ -1,11 +1,17 @@
-#include <malloc.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <sys/prctl.h>
 
 /*
- * Loaded into the child JVM process through LD_PRELOAD.
- * Android 12 / API 31 Bionic supports mallopt option -204 to disable
- * software heap pointer tagging before HotSpot starts allocating memory.
+ * Android Bionic's heap-tagging control is exposed as android_mallopt(),
+ * not the POSIX mallopt() declaration in the NDK public malloc.h.
+ * The integer option value is BIONIC_M_SET_HEAP_TAGGING_LEVEL (-204);
+ * value 0 disables heap pointer tagging before the child JVM allocates.
  */
+extern bool android_mallopt(int opcode, void* value, size_t value_size);
+
 __attribute__((constructor))
 static void nice_disable_heap_pointer_tagging(void) {
-    (void) mallopt(-204, 0);
+    int tagging_level = 0;
+    (void) android_mallopt(-204, &tagging_level, sizeof(tagging_level));
 }
