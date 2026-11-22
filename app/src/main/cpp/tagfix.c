@@ -1,17 +1,26 @@
-#include <stdbool.h>
-#include <stdint.h>
-#include <sys/prctl.h>
+#include <dlfcn.h>
+#include <stddef.h>
 
 /*
- * Android Bionic's heap-tagging control is exposed as android_mallopt(),
- * not the POSIX mallopt() declaration in the NDK public malloc.h.
- * The integer option value is BIONIC_M_SET_HEAP_TAGGING_LEVEL (-204);
- * value 0 disables heap pointer tagging before the child JVM allocates.
+ * Resolve mallopt dynamically because this app supports Android versions
+ * below API 31, while Bionic's heap-tagging option (-204) is available
+ * from API 31. The child JVM is launched with this library preloaded, so
+ * the constructor runs before HotSpot performs its heap allocations.
  */
-extern bool android_mallopt(int opcode, void* value, size_t value_size);
+typedef int (*MalloptFunction)(int option, int value);
 
 __attribute__((constructor))
 static void nice_disable_heap_pointer_tagging(void) {
-    int tagging_level = 0;
-    (void) android_mallopt(-204, &tagging_level, sizeof(tagging_level));
+    void* libc = dlopen("libc.so", RTLD_NOW | RTLD_LOCAL);
+    if (libc == NULL) {
+        return;
+    }
+
+    MalloptFunction mallopt_fn =
+            (MalloptFunction) dlsym(libc, "mallopt");
+    if (mallopt_fn != NULL) {
+        (void) mallopt_fn(-204, 0);
+    }
+
+    dlclose(libc);
 }
