@@ -1595,6 +1595,13 @@ public class MainActivity extends Activity {
             builder.redirectOutput(outputFile);
             java.util.Map<String, String> env = builder.environment();
             env.put("JAVA_HOME", jdkHome.getAbsolutePath());
+            File tagFix = new File(getApplicationInfo().nativeLibraryDir, "libtagfix.so");
+            if (!tagFix.isFile()) {
+                throw new IllegalStateException("Android heap-tagging compatibility library is missing: " + tagFix.getAbsolutePath());
+            }
+            String existingPreload = env.get("LD_PRELOAD");
+            env.put("LD_PRELOAD", tagFix.getAbsolutePath() +
+                    (existingPreload == null || existingPreload.isEmpty() ? "" : ":" + existingPreload));
             env.put("KOTLIN_HOME", getKotlinCompilerHome().getAbsolutePath());
             env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
             String jdkLib = new File(jdkHome, "lib").getAbsolutePath();
@@ -2052,6 +2059,13 @@ public class MainActivity extends Activity {
             builder.redirectOutput(outputFile);
             java.util.Map<String, String> env = builder.environment();
             env.put("JAVA_HOME", jdkHome.getAbsolutePath());
+            File tagFix = new File(getApplicationInfo().nativeLibraryDir, "libtagfix.so");
+            if (!tagFix.isFile()) {
+                throw new IllegalStateException("Android heap-tagging compatibility library is missing: " + tagFix.getAbsolutePath());
+            }
+            String existingPreload = env.get("LD_PRELOAD");
+            env.put("LD_PRELOAD", tagFix.getAbsolutePath() +
+                    (existingPreload == null || existingPreload.isEmpty() ? "" : ":" + existingPreload));
             env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
             String lib = new File(jdkHome, "lib").getAbsolutePath();
             String server = new File(jdkHome, "lib/server").getAbsolutePath();
