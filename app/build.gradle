@@ -185,7 +185,7 @@ tasks.register('downloadOpenJdk21') {
         }
         archiveFile.parentFile.mkdirs()
         def tempFile = new File(archiveFile.parentFile, archiveFile.name + '.part')
-        logger.lifecycle("Downloading full OpenJDK 21 ARM64 archive (~312 MB)")
+        logger.lifecycle("Downloading OpenJDK 21 ARM64 runtime archive (~59 MB)")
         new URL(jdkUrl).withInputStream { input ->
             tempFile.withOutputStream { output ->
                 byte[] buffer = new byte[1024 * 1024]
@@ -228,7 +228,7 @@ tasks.register('verifyOfflineBundles') {
         def jdk = jdkArchive.asFile
         def kotlin = kotlinCompilerArchive.asFile
         def libs = javaLibrariesOutput.get().dir('java-libs').asFile
-        if (!jdk.isFile() || jdk.length() < 100L * 1024L * 1024L) {
+        if (!jdk.isFile() || jdk.length() < 50L * 1024L * 1024L) {
             throw new GradleException("OpenJDK bundle missing or unexpectedly small: ${jdk}")
         }
         if (!kotlin.isFile() || kotlin.length() < 10L * 1024L * 1024L) {
