@@ -1107,6 +1107,21 @@ public class MainActivity extends Activity {
         if (!destination.exists() && !destination.mkdirs()) {
             throw new IllegalStateException("Cannot create Java library folder: " + destination);
         }
+        // Fast path after the first verified install: avoid opening every JAR
+        // as a ZIP file each time the user presses Run.
+        File installMarker = new File(destination, ".nice-libraries-ready");
+        if (installMarker.isFile()) {
+            int cached = 0;
+            boolean complete = true;
+            for (String name : assets) {
+                if (!name.toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) continue;
+                File jar = new File(destination, name);
+                if (!jar.isFile() || jar.length() < 22) { complete = false; break; }
+                cached++;
+            }
+            if (complete && cached > 0) return cached;
+            installMarker.delete();
+        }
         int ready = 0;
         byte[] buffer = new byte[32 * 1024];
         for (String name : assets) {
@@ -1143,6 +1158,7 @@ public class MainActivity extends Activity {
         if (ready == 0) {
             throw new IllegalStateException("No .jar files found in APK assets/java-libs. Check Gradle bundleJavaProjectLibraries task.");
         }
+        if (ready > 0) writeText(installMarker, "verified\\n" + ready);
         return ready;
     }
 
