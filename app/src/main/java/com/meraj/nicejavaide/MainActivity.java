@@ -1281,12 +1281,18 @@ public class MainActivity extends Activity {
                 if (home == null) throw new IllegalStateException("JDK bin/java and bin/javac were not found in the archive");
                 File destination = jdkHome;
                 deleteTree(destination);
-                if (!home.equals(staging)) {
-                    if (!home.renameTo(destination)) throw new IllegalStateException("Cannot move extracted JDK into place");
-                    deleteTree(staging);
-                } else if (!staging.renameTo(destination)) {
-                    throw new IllegalStateException("Cannot finalize JDK installation");
+                if (!destination.mkdirs() && !destination.isDirectory()) {
+                    throw new IllegalStateException("Cannot create final JDK directory: " + destination);
                 }
+                // File.renameTo() is unreliable for nested directories on Android
+                // when the extracted tree contains symlinks/hardlinks. Copy the
+                // already-validated tree entry-by-entry, preserving symlinks.
+                copyJdkTree(home, destination);
+                if (!new File(destination, "bin/javac").isFile() ||
+                        !new File(destination, "lib/modules").isFile()) {
+                    throw new IllegalStateException("JDK copy to final directory is incomplete");
+                }
+                deleteTree(staging);
                 jdkHome = destination;
                 // Preserve executable permissions even if the extraction filesystem
                 // did not retain the TAR mode bits.
@@ -1389,6 +1395,44 @@ public class MainActivity extends Activity {
                 "assets/jdk21-android.tar. APK root assets: [" + found + "]");
         if (lastMissing != null) error.initCause(lastMissing);
         throw error;
+    }
+
+    private void copyJdkTree(File source, File destination) throws Exception {
+        android.system.StructStat stat = android.system.Os.lstat(source.getAbsolutePath());
+        int type = stat.st_mode & android.system.OsConstants.S_IFMT;
+        if (type == android.system.OsConstants.S_IFLNK) {
+            String target = android.system.Os.readlink(source.getAbsolutePath());
+            if (target == null || target.isEmpty() || target.startsWith("/")) {
+                throw new SecurityException("Unsafe symlink while finalizing JDK: " + source);
+            }
+            android.system.Os.symlink(target, destination.getAbsolutePath());
+            return;
+        }
+        if (type == android.system.OsConstants.S_IFDIR) {
+            if (!destination.exists() && !destination.mkdirs()) {
+                throw new IllegalStateException("Cannot create JDK directory: " + destination);
+            }
+            File[] children = source.listFiles();
+            if (children == null) throw new IllegalStateException("Cannot read extracted JDK directory: " + source);
+            for (File child : children) {
+                copyJdkTree(child, new File(destination, child.getName()));
+            }
+            return;
+        }
+        if (type != android.system.OsConstants.S_IFREG) {
+            throw new SecurityException("Unsupported special file in JDK: " + source);
+        }
+        File parent = destination.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IllegalStateException("Cannot create JDK parent: " + parent);
+        }
+        try (InputStream in = new FileInputStream(source);
+             FileOutputStream out = new FileOutputStream(destination)) {
+            byte[] data = new byte[64 * 1024];
+            int count;
+            while ((count = in.read(data)) != -1) out.write(data, 0, count);
+        }
+        if (source.canExecute()) destination.setExecutable(true, false);
     }
 
     private File findJdkHome(File folder, int depth) {
