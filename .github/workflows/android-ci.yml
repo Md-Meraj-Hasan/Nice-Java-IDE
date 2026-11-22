@@ -60,6 +60,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android NDK and CMake
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;27.2.12479018 cmake;3.22.1'
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
