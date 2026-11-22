@@ -1230,10 +1230,13 @@ public class MainActivity extends Activity {
                     TarArchiveEntry entry;
                     byte[] buffer = new byte[64 * 1024];
                     while ((entry = tar.getNextTarEntry()) != null) {
-                        File output = new File(staging, entry.getName()).getCanonicalFile();
+                        String entryName = entry.getName();
+                        String safeEntryName = normalizeArchiveEntryName(entryName);
+                        File output = new File(staging, safeEntryName).getAbsoluteFile();
                         String base = staging.getCanonicalPath() + File.separator;
-                        if (!output.getPath().startsWith(base) && !output.equals(staging)) {
-                            throw new SecurityException("Unsafe path in JDK archive");
+                        String canonicalOutput = output.getCanonicalPath();
+                        if (!canonicalOutput.startsWith(base) && !canonicalOutput.equals(staging.getCanonicalPath())) {
+                            throw new SecurityException("Unsafe path in JDK archive: " + entryName);
                         }
                         if (entry.isDirectory()) {
                             if (!output.exists() && !output.mkdirs()) throw new IllegalStateException("Cannot create " + entry.getName());
@@ -1317,6 +1320,33 @@ public class MainActivity extends Activity {
                 }
             });
         }, "Jdk21-Extractor").start();
+    }
+
+    // Normalize archive names lexically before resolving them on disk. This
+    // accepts harmless "./" and internal "../" segments while rejecting any
+    // entry that attempts to escape the extraction root or uses an absolute path.
+    private String normalizeArchiveEntryName(String name) throws SecurityException {
+        if (name == null || name.isEmpty()) throw new SecurityException("Empty path in JDK archive");
+        String value = name.replace('\\\\', '/');
+        if (value.startsWith("/") || value.matches("^[A-Za-z]:.*") || value.indexOf('\\0') >= 0) {
+            throw new SecurityException("Unsafe absolute path in JDK archive: " + name);
+        }
+        java.util.ArrayDeque<String> parts = new java.util.ArrayDeque<>();
+        for (String part : value.split("/")) {
+            if (part.isEmpty() || ".".equals(part)) continue;
+            if ("..".equals(part)) {
+                if (parts.isEmpty()) throw new SecurityException("Unsafe path in JDK archive: " + name);
+                parts.removeLast();
+            } else {
+                parts.addLast(part);
+            }
+        }
+        StringBuilder normalized = new StringBuilder();
+        for (String part : parts) {
+            if (normalized.length() > 0) normalized.append(File.separator);
+            normalized.append(part);
+        }
+        return normalized.toString();
     }
 
     private InputStream openBundledJdkArchive() throws Exception {
