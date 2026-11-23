@@ -36,26 +36,31 @@ jobs:
                       print(f"{label} ENTRY name={m.name!r} type={m.type!r} size={m.size} "
                             f"issparse={m.issparse()} linkname={m.linkname!r} "
                             f"pax={m.pax_headers}", flush=True)
-                  module_files = [m for m in archive.getmembers()
-                                  if m.name.rstrip("/").endswith("lib/modules")]
+                  members = archive.getmembers()
+                  module_files = [m for m in members if m.name.rstrip("/").endswith("/lib/modules")
+                                  or m.name.rstrip("/") == "lib/modules"]
                   if not module_files:
                       print(f"{label}: NO lib/modules entry in archive", flush=True)
                   for m in module_files:
                       print(f"{label}: modules isfile={m.isfile()} islnk={m.islnk()} "
                             f"issym={m.issym()} size={m.size}", flush=True)
                   if label == "complete":
-                      names = {m.name.rstrip("/"): m for m in archive.getmembers()}
-                      required = ["./bin/java", "./bin/javac", "./lib/modules"]
-                      missing = [name for name in required if name not in names]
+                      def find_entry(suffix):
+                          return next((m for m in members if m.name.rstrip("/").endswith(suffix)), None)
+                      java_entry = find_entry("/bin/java")
+                      javac_entry = find_entry("/bin/javac")
+                      modules_entry = find_entry("/lib/modules")
+                      missing = [name for name, item in [("bin/java", java_entry),
+                                 ("bin/javac", javac_entry), ("lib/modules", modules_entry)] if item is None]
                       if missing:
                           raise SystemExit("Complete JDK archive missing required paths: " + repr(missing))
-                      if not names["./lib/modules"].isdir():
-                          raise SystemExit("Complete JDK lib/modules must be an exploded directory")
-                      module_children = [m for m in archive.getmembers()
-                                         if m.name.startswith("./lib/modules/")]
-                      if not module_children:
-                          raise SystemExit("Complete JDK lib/modules directory is empty")
-                      print("PASS: complete JDK has bin/java, bin/javac and populated exploded lib/modules", flush=True)
+                      # lib/modules is the binary jimage file in a normal JDK image.
+                      # It must be a populated regular TAR file, not an exploded directory.
+                      if not modules_entry.isfile() or modules_entry.size < 1024 * 1024:
+                          raise SystemExit("Complete JDK lib/modules must be a populated regular jimage file")
+                      if not java_entry.isfile() or not javac_entry.isfile():
+                          raise SystemExit("Complete JDK bin/java and bin/javac must be regular files")
+                      print("PASS: complete JDK has bin/java, bin/javac and populated regular-file lib/modules jimage", flush=True)
           PY
 
       - name: Set up Node.js for preview tests
