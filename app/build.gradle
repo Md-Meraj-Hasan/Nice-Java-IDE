@@ -133,8 +133,8 @@ tasks.register('downloadKotlinCompiler') {
 }
 
 def jdkArchive = layout.projectDirectory.file('src/main/assets/jdk21-android.tar.gz')
-def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.14/jdk21-android-arm64.tar.gz'
-def jdkSha256 = '8746f96a348c34b1e21508128478cb613de05f9d0aa9befad2967f83a9542680'
+def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.14/jdk21-android-arm64-complete.tar.gz'
+def jdkSha256 = '3eec4ed966f0adea9510e30e3393aeca3fab4c051c1575000d4ca41c4a7f752a'
 
 def jdkLauncherOutput = layout.buildDirectory.dir('generated/jniLibs/arm64-v8a')
 
@@ -185,7 +185,7 @@ tasks.register('downloadOpenJdk21') {
         }
         archiveFile.parentFile.mkdirs()
         def tempFile = new File(archiveFile.parentFile, archiveFile.name + '.part')
-        logger.lifecycle("Downloading OpenJDK 21 ARM64 runtime archive (~59 MB)")
+        logger.lifecycle("Downloading complete OpenJDK 21 ARM64 runtime archive (~108 MB)")
         new URL(jdkUrl).withInputStream { input ->
             tempFile.withOutputStream { output ->
                 byte[] buffer = new byte[1024 * 1024]
