@@ -3,6 +3,13 @@ plugins {
 }
 
 android {
+    ndkVersion '27.2.12479018'
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
     // Keep the downloaded JDK/Kotlin archives under the standard APK assets/ namespace.
     sourceSets.main.assets.srcDir(layout.projectDirectory.dir('src/main/assets'))
     sourceSets.main.jniLibs.srcDir(layout.buildDirectory.dir('generated/jniLibs'))
@@ -126,8 +133,8 @@ tasks.register('downloadKotlinCompiler') {
 }
 
 def jdkArchive = layout.projectDirectory.file('src/main/assets/jdk21-android.tar.gz')
-def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.4/jdk21-android.tar.gz'
-def jdkSha256 = '9e38b66557db40481d90a6f5cfbce05180414e3131a6b77c4dea1304fcba6e9b'
+def jdkUrl = 'https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.14/jdk21-android-arm64-complete.tar.gz'
+def jdkSha256 = '3eec4ed966f0adea9510e30e3393aeca3fab4c051c1575000d4ca41c4a7f752a'
 
 def jdkLauncherOutput = layout.buildDirectory.dir('generated/jniLibs/arm64-v8a')
 
@@ -178,7 +185,7 @@ tasks.register('downloadOpenJdk21') {
         }
         archiveFile.parentFile.mkdirs()
         def tempFile = new File(archiveFile.parentFile, archiveFile.name + '.part')
-        logger.lifecycle("Downloading full OpenJDK 21 ARM64 archive (~312 MB)")
+        logger.lifecycle("Downloading complete OpenJDK 21 ARM64 runtime archive (~108 MB)")
         new URL(jdkUrl).withInputStream { input ->
             tempFile.withOutputStream { output ->
                 byte[] buffer = new byte[1024 * 1024]
@@ -221,7 +228,7 @@ tasks.register('verifyOfflineBundles') {
         def jdk = jdkArchive.asFile
         def kotlin = kotlinCompilerArchive.asFile
         def libs = javaLibrariesOutput.get().dir('java-libs').asFile
-        if (!jdk.isFile() || jdk.length() < 100L * 1024L * 1024L) {
+        if (!jdk.isFile() || jdk.length() < 50L * 1024L * 1024L) {
             throw new GradleException("OpenJDK bundle missing or unexpectedly small: ${jdk}")
         }
         if (!kotlin.isFile() || kotlin.length() < 10L * 1024L * 1024L) {
@@ -283,6 +290,16 @@ tasks.register('verifyPackagedJdkAsset') {
                 throw new GradleException("Expected exactly one full-size JDK archive (assets/jdk21-android.tar.gz or assets/jdk21-android.tar). Found: ${candidates}")
             }
             logger.lifecycle("Verified packaged OpenJDK asset inside APK: ${entry.name} (${entry.size} bytes)")
+
+            // The Java/Javac ELF launchers must be extracted by PackageManager
+            // into nativeLibraryDir; app-private extracted files can be mounted noexec.
+            ['lib/arm64-v8a/libnicejava.so', 'lib/arm64-v8a/libnicejavac.so'].each { launcherName ->
+                def launcher = zip.getEntry(launcherName)
+                if (launcher == null || launcher.size < 1024) {
+                    throw new GradleException("Missing executable ARM64 JDK launcher in APK: ${launcherName}")
+                }
+                logger.lifecycle("Verified packaged executable JDK launcher: ${launcherName} (${launcher.size} bytes)")
+            }
 
             // Verify that the Kotlin compiler ZIP is also present and contains
             // the exact files expected by MainActivity.ensureKotlinCompilerInstalled().

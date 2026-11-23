@@ -58,7 +58,7 @@ The source patch improves three failure points:
 - Java package/class detection now uses correctly escaped Java regular expressions, so packaged classes are launched with their fully-qualified class name.
 - Native JDK command output is redirected to a temporary log file while the process runs. This prevents a full stdout pipe from blocking the reader before the timeout can be applied.
 - Offline JAR installation copies to a temporary file, validates each JAR as a ZIP archive, then atomically activates it. Damaged cached JARs are replaced on the next install.
-- The JDK is not marked installed unless `java`, `javac`, `lib/modules`, and executable permissions are present.
+- The JDK is not marked installed unless `java`, `javac`, a readable regular-file `lib/modules` jimage, executable permissions, and successful native `java -version` / `javac -version` smoke tests are present. In a standard JDK, `lib/modules` is a binary file, not a directory.
 - `verifyOfflineBundles` makes the APK build fail early with a clear error if the OpenJDK archive, Kotlin compiler archive, or Java project JAR assets are missing.
 
 ### Required device validation

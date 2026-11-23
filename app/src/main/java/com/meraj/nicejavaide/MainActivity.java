@@ -1,6 +1,8 @@
 package com.meraj.nicejavaide;
 
-import android.app.Activity;
+import androidx.activity.ComponentActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import android.content.Intent;
 import android.net.Uri;
 import android.database.Cursor;
@@ -43,7 +45,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 
-public class MainActivity extends Activity {
+public class MainActivity extends ComponentActivity {
     private static final int REQUEST_OPEN = 101;
     private static final int REQUEST_SAVE_AS = 102;
     private static final int REQUEST_WORKSPACE_TREE = 103;
@@ -69,6 +71,11 @@ public class MainActivity extends Activity {
     private boolean restoringEditor = false;
     private static final int HISTORY_LIMIT = 100;
     private File jdkHome;
+    private volatile boolean jdkInstallInProgress = false;
+    private int pendingPickerRequest;
+    private final ActivityResultLauncher<Intent> documentPicker = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result ->
+                    handleActivityResult(result.getResultCode(), result.getData()));
 
     @Override
     protected void onCreate(Bundle state) {
@@ -191,6 +198,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> { if (status != null) status.setText(message == null ? "" : message); });
         }
 
+        @android.webkit.JavascriptInterface
         public void run() {
             runOnUiThread(() -> {
                 try {
@@ -250,6 +258,44 @@ public class MainActivity extends Activity {
         @android.webkit.JavascriptInterface
         public void newKotlin() {
             runOnUiThread(() -> promptNewKotlinFile());
+        }
+
+        @android.webkit.JavascriptInterface
+        public void selectLanguage(String extension, String code) {
+            runOnUiThread(() -> {
+                try {
+                    saveCurrentBeforeSwitch();
+                    String ext = extension == null ? "" : extension.toLowerCase(java.util.Locale.ROOT);
+                    if (!ext.matches("java|kt|html|css|js")) {
+                        throw new IllegalArgumentException("Unsupported editor language: " + ext);
+                    }
+                    String base = ext.equals("java") || ext.equals("kt") ? "Main" :
+                            ext.equals("html") ? "index" : ext.equals("css") ? "style" : "script";
+                    File target = new File(workspace, base + "." + ext);
+                    int suffix = 2;
+                    while (target.exists() && !target.equals(currentFile)) {
+                        target = new File(workspace, base + "-" + suffix++ + "." + ext);
+                    }
+                    currentFile = target;
+                    currentUri = null;
+                    writeText(currentFile, code == null ? "" : code);
+                    if (ext.equals("css") || ext.equals("js")) {
+                        File htmlEntry = new File(workspace, "index.html");
+                        if (!htmlEntry.isFile()) {
+                            String html = "<!doctype html>\\n<html><head><meta charset=\\\"UTF-8\\\"><title>Nice Web Project</title>" +
+                                    "<link rel=\\\"stylesheet\\\" href=\\\"style.css\\\"></head><body>" +
+                                    "<h1>Hello Web!</h1><script src=\\\"script.js\\\"></script></body></html>\\n";
+                            writeText(htmlEntry, html);
+                        }
+                    }
+                    addOpenTab(currentFile);
+                    setEditorText(code == null ? "" : code);
+                    updateFileLabel();
+                    status.setText(ext.toUpperCase(java.util.Locale.ROOT) + " editor ready • " + currentFile.getName());
+                } catch (Exception e) {
+                    status.setText("Language switch error: " + e.getMessage());
+                }
+            });
         }
     }
 
@@ -537,7 +583,8 @@ public class MainActivity extends Activity {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         intent.putExtra("android.content.extra.SHOW_ADVANCED", true);
-        startActivityForResult(intent, REQUEST_WORKSPACE_TREE);
+        pendingPickerRequest = REQUEST_WORKSPACE_TREE;
+        documentPicker.launch(intent);
     }
 
     private Uri findOrCreateFolder(Uri tree, Uri parent, String name) throws Exception {
@@ -815,15 +862,20 @@ public class MainActivity extends Activity {
     }
 
     private void saveCurrentBeforeSwitch() throws Exception {
+        String editorText = editor.getText().toString();
         if (currentUri != null) {
-            writeUri(currentUri, editor.getText().toString());
+            String existing = readUri(currentUri);
+            if (!editorText.equals(existing)) writeUri(currentUri, editorText);
         } else if (currentFile != null) {
-            writeText(currentFile, editor.getText().toString());
-            String treeText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null);
-            String javaText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("java_folder", null);
-            String webText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("web_folder", null);
-            if (treeText != null && javaText != null && webText != null) {
-                syncFileToSaf(currentFile, Uri.parse(treeText), Uri.parse(javaText), Uri.parse(webText));
+            String existing = currentFile.isFile() ? readText(currentFile) : null;
+            if (!editorText.equals(existing)) {
+                writeText(currentFile, editorText);
+                String treeText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("tree_uri", null);
+                String javaText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("java_folder", null);
+                String webText = getSharedPreferences(STORAGE_PREFS, MODE_PRIVATE).getString("web_folder", null);
+                if (treeText != null && javaText != null && webText != null) {
+                    syncFileToSaf(currentFile, Uri.parse(treeText), Uri.parse(javaText), Uri.parse(webText));
+                }
             }
         }
     }
@@ -833,7 +885,8 @@ public class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/html", "text/css", "application/javascript", "text/javascript", "text/x-java", "text/plain", "application/json", "application/xml", "application/octet-stream"});
-        startActivityForResult(intent, REQUEST_OPEN);
+        pendingPickerRequest = REQUEST_OPEN;
+        documentPicker.launch(intent);
     }
 
     private void saveAs() {
@@ -841,12 +894,13 @@ public class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("text/x-java");
         intent.putExtra(Intent.EXTRA_TITLE, currentFile == null ? "Main.java" : currentFile.getName());
-        startActivityForResult(intent, REQUEST_SAVE_AS);
+        pendingPickerRequest = REQUEST_SAVE_AS;
+        documentPicker.launch(intent);
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+    private void handleActivityResult(int resultCode, Intent data) {
+        int requestCode = pendingPickerRequest;
+        pendingPickerRequest = 0;
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         if (requestCode == REQUEST_WORKSPACE_TREE) {
@@ -1007,7 +1061,8 @@ public class MainActivity extends Activity {
         File java = new File(jdkHome, "bin/java");
         File javac = new File(jdkHome, "bin/javac");
         File runtime = new File(jdkHome, "lib/modules");
-        return java.isFile() && javac.isFile() && runtime.isFile();
+        return java.isFile() && javac.isFile() && runtime.isFile() &&
+                runtime.length() >= 1024L * 1024L && runtime.canRead();
     }
 
     private File getJavaLibrariesDirectory() {
@@ -1063,6 +1118,21 @@ public class MainActivity extends Activity {
         if (!destination.exists() && !destination.mkdirs()) {
             throw new IllegalStateException("Cannot create Java library folder: " + destination);
         }
+        // Fast path after the first verified install: avoid opening every JAR
+        // as a ZIP file each time the user presses Run.
+        File installMarker = new File(destination, ".nice-libraries-ready");
+        if (installMarker.isFile()) {
+            int cached = 0;
+            boolean complete = true;
+            for (String name : assets) {
+                if (!name.toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) continue;
+                File jar = new File(destination, name);
+                if (!jar.isFile() || jar.length() < 22) { complete = false; break; }
+                cached++;
+            }
+            if (complete && cached > 0) return cached;
+            installMarker.delete();
+        }
         int ready = 0;
         byte[] buffer = new byte[32 * 1024];
         for (String name : assets) {
@@ -1099,6 +1169,7 @@ public class MainActivity extends Activity {
         if (ready == 0) {
             throw new IllegalStateException("No .jar files found in APK assets/java-libs. Check Gradle bundleJavaProjectLibraries task.");
         }
+        if (ready > 0) writeText(installMarker, "verified\\n" + ready);
         return ready;
     }
 
@@ -1141,6 +1212,11 @@ public class MainActivity extends Activity {
     }
 
     private void extractBundledJdk() {
+        if (jdkInstallInProgress) {
+            Toast.makeText(this, "JDK installation is already running", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        jdkInstallInProgress = true;
         android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
         progress.setTitle("Installing OpenJDK 21");
         progress.setMessage("Extracting full offline toolchain…");
@@ -1153,8 +1229,10 @@ public class MainActivity extends Activity {
             boolean success = false;
             String error = null;
             try {
-                deleteTree(staging);
-                if (!staging.mkdirs()) throw new IllegalStateException("Cannot create JDK folder");
+                deleteJdkTreeStrict(staging);
+                if (!staging.mkdir() && !staging.isDirectory()) {
+                    throw new IllegalStateException("Cannot create JDK staging folder: " + staging.getAbsolutePath());
+                }
                 try (InputStream raw = openBundledJdkArchive();
                      java.io.PushbackInputStream probe = new java.io.PushbackInputStream(raw, 2)) {
                     int first = probe.read();
@@ -1170,26 +1248,49 @@ public class MainActivity extends Activity {
                     TarArchiveEntry entry;
                     byte[] buffer = new byte[64 * 1024];
                     while ((entry = tar.getNextTarEntry()) != null) {
-                        File output = new File(staging, entry.getName()).getCanonicalFile();
+                        String entryName = entry.getName();
+                        String normalizedEntryName = entryName.replace('\\', '/');
+                        boolean isModulesEntry = normalizeModulesEntry(normalizedEntryName);
+                        // Treat the extraction staging folder as the archive's parent root.
+                        // Some JDK tar entries intentionally use one leading-directory
+                        // traversal (for example lib/../../support/...). Resolve that
+                        // traversal inside staging, never outside it.
+                        String safeEntryName = normalizeArchiveEntryName("root/" + entryName);
+                        File output = new File(staging, safeEntryName).getAbsoluteFile();
                         String base = staging.getCanonicalPath() + File.separator;
-                        if (!output.getPath().startsWith(base) && !output.equals(staging)) {
-                            throw new SecurityException("Unsafe path in JDK archive");
+                        String canonicalOutput = output.getCanonicalPath();
+                        if (!canonicalOutput.startsWith(base) && !canonicalOutput.equals(staging.getCanonicalPath())) {
+                            throw new SecurityException("Unsafe path in JDK archive: " + entryName);
                         }
                         if (entry.isDirectory()) {
                             if (!output.exists() && !output.mkdirs()) throw new IllegalStateException("Cannot create " + entry.getName());
                         } else if (entry.isSymbolicLink()) {
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create link folder");
-                            File resolvedTarget = new File(parent, entry.getLinkName()).getCanonicalFile();
-                            if (!resolvedTarget.getPath().startsWith(staging.getCanonicalPath() + File.separator)) throw new SecurityException("Unsafe symlink in JDK archive");
-                            android.system.Os.symlink(entry.getLinkName(), output.getAbsolutePath());
+                            String linkName = entry.getLinkName();
+                            if (linkName == null || linkName.isEmpty() || linkName.startsWith("/") ||
+                                    linkName.matches("^[A-Za-z]:.*") || linkName.indexOf((char) 0) >= 0) {
+                                throw new SecurityException("Unsafe symlink target in JDK archive: " + entryName + " -> " + linkName);
+                            }
+                            String parentRelative = staging.toPath().relativize(parent.toPath()).toString();
+                            String combinedTarget = parentRelative.isEmpty() ? linkName : parentRelative + "/" + linkName;
+                            // Validate the target lexically relative to the link's parent.
+                            // Canonical resolution is incorrect here because valid JDK links
+                            // may point through another symlink that has not been extracted yet.
+                            normalizeArchiveEntryName(combinedTarget);
+                            android.system.Os.symlink(linkName, output.getAbsolutePath());
                         } else if (entry.isLink()) {
                             File target = new File(staging, entry.getLinkName()).getCanonicalFile();
                             if (!target.getPath().startsWith(staging.getCanonicalPath() + File.separator) || !target.exists()) throw new SecurityException("Unsafe or missing hardlink target");
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create hardlink folder");
                             android.system.Os.link(target.getAbsolutePath(), output.getAbsolutePath());
-                        } else if (entry.isFile()) {
+                        } else if (entry.isFile() || entry.isSparse() || entry.getSize() > 0 || isModulesEntry) {
+                            // Some GNU/PAX TAR producers expose data-bearing entries with a
+                            // non-standard type flag. Do not silently skip a non-empty entry:
+                            // OpenJDK's lib/modules image is essential and may be sparse.
+                            // The explicit modules-path fallback also captures a zero-reported-
+                            // size sparse entry so the TAR stream can provide its expanded data.
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create " + parent);
                             try (FileOutputStream out = new FileOutputStream(output)) {
@@ -1204,13 +1305,36 @@ public class MainActivity extends Activity {
                 File home = findJdkHome(staging, 0);
                 if (home == null) throw new IllegalStateException("JDK bin/java and bin/javac were not found in the archive");
                 File destination = jdkHome;
-                deleteTree(destination);
-                if (!home.equals(staging)) {
-                    if (!home.renameTo(destination)) throw new IllegalStateException("Cannot move extracted JDK into place");
-                    deleteTree(staging);
-                } else if (!staging.renameTo(destination)) {
-                    throw new IllegalStateException("Cannot finalize JDK installation");
+                deleteJdkTreeStrict(destination);
+                if (!destination.mkdir() && !destination.isDirectory()) {
+                    throw new IllegalStateException("Cannot create final JDK directory: " + destination.getAbsolutePath());
                 }
+                // File.renameTo() is unreliable for nested directories on Android
+                // when the extracted tree contains symlinks/hardlinks. Copy the
+                // already-validated tree entry-by-entry, preserving symlinks.
+                copyJdkTree(home, destination);
+                File sourceJavac = new File(home, "bin/javac");
+                File copiedJavac = new File(destination, "bin/javac");
+                File sourceModules = new File(home, "lib/modules");
+                File copiedModules = new File(destination, "lib/modules");
+                // In a standard OpenJDK image, lib/modules is the binary jimage
+                // file, NOT a directory. Treating it as a directory creates an
+                // unusable JDK even when TAR extraction itself succeeded.
+                boolean sourceModulesValid = sourceModules.isFile() && sourceModules.length() >= 1024L * 1024L;
+                boolean copiedModulesValid = copiedModules.isFile() && copiedModules.length() == sourceModules.length() &&
+                        copiedModules.length() >= 1024L * 1024L;
+                boolean javacCopied = copiedJavac.isFile() && copiedJavac.length() == sourceJavac.length();
+                if (!sourceModulesValid || !copiedModulesValid || !javacCopied) {
+                    throw new IllegalStateException("JDK copy verification failed. javac source=" +
+                            sourceJavac.isFile() + " (" + sourceJavac.length() + " bytes), destination=" +
+                            copiedJavac.isFile() + " (" + copiedJavac.length() + " bytes); lib/modules source=" +
+                            sourceModules.isFile() + " (" + sourceModules.length() + " bytes), destination=" +
+                            copiedModules.isFile() + " (" + copiedModules.length() + " bytes). " +
+                            "Expected lib/modules to be a populated regular jimage file. Free internal storage=" +
+                            android.text.format.Formatter.formatShortFileSize(this,
+                                    new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes()));
+                }
+                deleteTree(staging);
                 jdkHome = destination;
                 // Preserve executable permissions even if the extraction filesystem
                 // did not retain the TAR mode bits.
@@ -1226,25 +1350,39 @@ public class MainActivity extends Activity {
                 File modulesFile = new File(jdkHome, "lib/modules");
                 if (javaBinary.isFile()) javaBinary.setExecutable(true, false);
                 if (javacBinary.isFile()) javacBinary.setExecutable(true, false);
-                if (!javaBinary.isFile() || !javacBinary.isFile() || !modulesFile.isFile()) {
+                if (!javaBinary.isFile() || !javacBinary.isFile() ||
+                        !modulesFile.isFile() || modulesFile.length() < 1024L * 1024L || !modulesFile.canRead()) {
                     throw new IllegalStateException("Extracted JDK is incomplete. java=" +
                             javaBinary.isFile() + " (" + javaBinary.getAbsolutePath() + ")" +
                             ", javac=" + javacBinary.isFile() + " (" + javacBinary.getAbsolutePath() + ")" +
-                            ", lib/modules=" + modulesFile.isFile() +
-                            ". Extracted folder: " + jdkHome.getAbsolutePath());
+                            ", lib/modules regular file=" + modulesFile.isFile() +
+                            " (" + modulesFile.length() + " bytes, readable=" + modulesFile.canRead() + ")" +
+                            ". Expected a populated OpenJDK jimage file. Extracted folder: " + jdkHome.getAbsolutePath());
                 }
                 if (!javaBinary.canExecute() || !javacBinary.canExecute()) {
                     throw new IllegalStateException("JDK files exist but Android could not mark them executable. java executable=" +
                             javaBinary.canExecute() + ", javac executable=" + javacBinary.canExecute());
                 }
+                // Do not report installation success based on file presence alone.
+                // Launch both native tools now so a bad/missing jimage is caught here,
+                // instead of failing later on every Java and Kotlin build.
+                String javaSmoke = runJdkCommand(javaBinary, 60, "-version");
+                String javacSmoke = runJdkCommand(javacBinary, 60, "-version");
+                if (javaSmoke.isEmpty() || javacSmoke.isEmpty()) {
+                    throw new IllegalStateException("OpenJDK native smoke test returned no version output. java=[" +
+                            javaSmoke + "], javac=[" + javacSmoke + "]");
+                }
                 success = true;
             } catch (Exception e) {
                 error = e.getClass().getSimpleName() + ": " + e.getMessage();
-                deleteTree(staging);
+                try { deleteJdkTreeStrict(staging); } catch (Exception cleanup) {
+                    error += " | Staging cleanup failed: " + cleanup.getMessage();
+                }
             }
             final boolean installed = success;
             final String failure = error;
             runOnUiThread(() -> {
+                jdkInstallInProgress = false;
                 progress.dismiss();
                 if (installed) {
                     status.setText("OpenJDK 21 extracted • native runtime test pending");
@@ -1257,6 +1395,40 @@ public class MainActivity extends Activity {
                 }
             });
         }, "Jdk21-Extractor").start();
+    }
+
+    private boolean normalizeModulesEntry(String entryName) {
+        if (entryName == null) return false;
+        String value = entryName.replace('\\', '/');
+        while (value.startsWith("./")) value = value.substring(2);
+        return value.equals("lib/modules") || value.endsWith("/lib/modules");
+    }
+
+    // Normalize archive names lexically before resolving them on disk. This
+    // accepts harmless "./" and internal "../" segments while rejecting any
+    // entry that attempts to escape the extraction root or uses an absolute path.
+    private String normalizeArchiveEntryName(String name) throws SecurityException {
+        if (name == null || name.isEmpty()) throw new SecurityException("Empty path in JDK archive");
+        String value = name.replace('\\', '/');
+        if (value.startsWith("/") || value.matches("^[A-Za-z]:.*") || value.indexOf('\0') >= 0) {
+            throw new SecurityException("Unsafe absolute path in JDK archive: " + name);
+        }
+        java.util.ArrayDeque<String> parts = new java.util.ArrayDeque<>();
+        for (String part : value.split("/")) {
+            if (part.isEmpty() || ".".equals(part)) continue;
+            if ("..".equals(part)) {
+                if (parts.isEmpty()) throw new SecurityException("Unsafe path in JDK archive: " + name);
+                parts.removeLast();
+            } else {
+                parts.addLast(part);
+            }
+        }
+        StringBuilder normalized = new StringBuilder();
+        for (String part : parts) {
+            if (normalized.length() > 0) normalized.append(File.separator);
+            normalized.append(part);
+        }
+        return normalized.toString();
     }
 
     private InputStream openBundledJdkArchive() throws Exception {
@@ -1288,6 +1460,44 @@ public class MainActivity extends Activity {
         throw error;
     }
 
+    private void copyJdkTree(File source, File destination) throws Exception {
+        android.system.StructStat stat = android.system.Os.lstat(source.getAbsolutePath());
+        int type = stat.st_mode & android.system.OsConstants.S_IFMT;
+        if (type == android.system.OsConstants.S_IFLNK) {
+            String target = android.system.Os.readlink(source.getAbsolutePath());
+            if (target == null || target.isEmpty() || target.startsWith("/")) {
+                throw new SecurityException("Unsafe symlink while finalizing JDK: " + source);
+            }
+            android.system.Os.symlink(target, destination.getAbsolutePath());
+            return;
+        }
+        if (type == android.system.OsConstants.S_IFDIR) {
+            if (!destination.exists() && !destination.mkdirs()) {
+                throw new IllegalStateException("Cannot create JDK directory: " + destination);
+            }
+            File[] children = source.listFiles();
+            if (children == null) throw new IllegalStateException("Cannot read extracted JDK directory: " + source);
+            for (File child : children) {
+                copyJdkTree(child, new File(destination, child.getName()));
+            }
+            return;
+        }
+        if (type != android.system.OsConstants.S_IFREG) {
+            throw new SecurityException("Unsupported special file in JDK: " + source);
+        }
+        File parent = destination.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IllegalStateException("Cannot create JDK parent: " + parent);
+        }
+        try (InputStream in = new FileInputStream(source);
+             FileOutputStream out = new FileOutputStream(destination)) {
+            byte[] data = new byte[64 * 1024];
+            int count;
+            while ((count = in.read(data)) != -1) out.write(data, 0, count);
+        }
+        if (source.canExecute()) destination.setExecutable(true, false);
+    }
+
     private File findJdkHome(File folder, int depth) {
         if (folder == null || depth > 4) return null;
         File java = new File(folder, "bin/java");
@@ -1315,6 +1525,35 @@ public class MainActivity extends Activity {
                 "\\n\\nFiles extracted. Native process execution still needs device verification.";
         new android.app.AlertDialog.Builder(this).setTitle("OpenJDK 21")
                 .setMessage(message).setPositiveButton("OK", null).show();
+    }
+
+    // Delete JDK installation trees without following symbolic links. File.exists()
+    // and File.isDirectory() follow links, which can leave dangling links behind or
+    // recursively delete a link target. lstat/unlink/rmdir make retries deterministic.
+    private void deleteJdkTreeStrict(File file) throws Exception {
+        if (file == null) return;
+        android.system.StructStat stat;
+        try {
+            stat = android.system.Os.lstat(file.getAbsolutePath());
+        } catch (android.system.ErrnoException missing) {
+            if (missing.errno == android.system.OsConstants.ENOENT) return;
+            throw missing;
+        }
+        int type = stat.st_mode & android.system.OsConstants.S_IFMT;
+        if (type == android.system.OsConstants.S_IFDIR) {
+            File[] children = file.listFiles();
+            if (children == null) throw new IllegalStateException("Cannot list JDK cleanup folder: " + file);
+            for (File child : children) deleteJdkTreeStrict(child);
+            if (!file.delete()) throw new IllegalStateException("Cannot remove JDK directory: " + file.getAbsolutePath());
+        } else {
+            if (!file.delete()) throw new IllegalStateException("Cannot remove JDK entry: " + file.getAbsolutePath());
+        }
+        try {
+            android.system.Os.lstat(file.getAbsolutePath());
+            throw new IllegalStateException("Could not remove stale JDK path: " + file.getAbsolutePath());
+        } catch (android.system.ErrnoException missing) {
+            if (missing.errno != android.system.OsConstants.ENOENT) throw missing;
+        }
     }
 
     private void deleteTree(File file) {
@@ -1393,13 +1632,30 @@ public class MainActivity extends Activity {
             web.setWebViewClient(new android.webkit.WebViewClient());
             web.setWebChromeClient(new android.webkit.WebChromeClient());
 
-            android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
-                    .setTitle("Web Preview • " + htmlFile.getName())
-                    .setView(web)
-                    .setPositiveButton("Close", null)
-                    .create();
+            // Minimal preview chrome: no title or footer text, only a top-right close icon.
+            android.app.Dialog dialog = new android.app.Dialog(this);
+            android.widget.FrameLayout previewRoot = new android.widget.FrameLayout(this);
+            previewRoot.setBackgroundColor(android.graphics.Color.WHITE);
+            previewRoot.addView(web, new android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+
+            android.widget.TextView close = new android.widget.TextView(this);
+            close.setText("×");
+            close.setTextSize(30);
+            close.setTextColor(0xFF202124);
+            close.setGravity(android.view.Gravity.CENTER);
+            close.setBackground(makePreviewCloseBackground());
+            android.widget.FrameLayout.LayoutParams closeParams = new android.widget.FrameLayout.LayoutParams(
+                    dp(44), dp(44), android.view.Gravity.TOP | android.view.Gravity.END);
+            closeParams.setMargins(0, dp(6), dp(6), 0);
+            previewRoot.addView(close, closeParams);
+            close.setOnClickListener(v -> dialog.dismiss());
+
+            dialog.setContentView(previewRoot);
             dialog.setOnDismissListener(d -> web.destroy());
             dialog.show();
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
             dialog.getWindow().setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT,
                     android.view.WindowManager.LayoutParams.MATCH_PARENT);
 
@@ -1413,18 +1669,78 @@ public class MainActivity extends Activity {
     }
 
 
+    private android.graphics.drawable.Drawable makePreviewCloseBackground() {
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        shape.setColor(0xEFFFFFFF);
+        shape.setStroke(dp(1), 0x22000000);
+        return shape;
+    }
+
     private File getKotlinCompilerHome() {
         return new File(getFilesDir(), "kotlin-compiler/kotlinc");
     }
 
+    private File getKotlinLauncher() {
+        return new File(getApplicationInfo().nativeLibraryDir, "libnicejava.so");
+    }
+
     private boolean isKotlinCompilerInstalled() {
         File home = getKotlinCompilerHome();
-        return new File(home, "lib/kotlin-compiler.jar").isFile()
-                && new File(home, "lib/kotlin-stdlib.jar").isFile();
+        String[] required = {
+                "kotlin-compiler.jar", "kotlin-stdlib.jar", "kotlin-script-runtime.jar",
+                "kotlin-reflect.jar", "kotlin-daemon.jar"
+        };
+        for (String name : required) {
+            File file = new File(home, "lib/" + name);
+            if (!file.isFile() || file.length() == 0) return false;
+        }
+        File launcher = getKotlinLauncher();
+        return launcher.isFile() && launcher.canExecute();
+    }
+
+    private void validateKotlinCompilerHome(File home) throws Exception {
+        String[] required = {
+                "kotlin-compiler.jar", "kotlin-stdlib.jar", "kotlin-script-runtime.jar",
+                "kotlin-reflect.jar", "kotlin-daemon.jar"
+        };
+        for (String name : required) {
+            File file = new File(home, "lib/" + name);
+            if (!file.isFile() || file.length() == 0) {
+                throw new IllegalStateException("Kotlin compiler installation is incomplete. Missing: " +
+                        file.getAbsolutePath());
+            }
+        }
+        File launcher = getKotlinLauncher();
+        if (!launcher.isFile() || !launcher.canExecute()) {
+            throw new IllegalStateException("Android Java launcher is missing or not executable: " +
+                    launcher.getAbsolutePath());
+        }
+    }
+
+    private File findKotlinCompilerHome(File root) {
+        if (root == null || !root.isDirectory()) return null;
+        File compilerJar = new File(root, "lib/kotlin-compiler.jar");
+        File stdlibJar = new File(root, "lib/kotlin-stdlib.jar");
+        if (compilerJar.isFile() && stdlibJar.isFile()) return root;
+        File[] children = root.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory()) {
+                    File found = findKotlinCompilerHome(child);
+                    if (found != null) return found;
+                }
+            }
+        }
+        return null;
     }
 
     private File ensureKotlinCompilerInstalled() throws Exception {
-        if (isKotlinCompilerInstalled()) return getKotlinCompilerHome();
+        if (isKotlinCompilerInstalled()) {
+            File existing = getKotlinCompilerHome();
+            validateKotlinCompilerHome(existing);
+            return existing;
+        }
         File destination = new File(getFilesDir(), "kotlin-compiler");
         File staging = new File(getFilesDir(), "kotlin-compiler-installing");
         long free = new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes();
@@ -1432,7 +1748,7 @@ public class MainActivity extends Activity {
             throw new IllegalStateException("At least 450 MB free internal storage is required to extract the offline Kotlin compiler.");
         }
         deleteTree(staging);
-        if (!staging.mkdirs()) throw new IllegalStateException("Cannot create Kotlin compiler folder.");
+        if (!staging.mkdirs()) throw new IllegalStateException("Cannot create Kotlin compiler staging folder: " + staging.getAbsolutePath());
         try (InputStream raw = getAssets().open("kotlin-compiler-2.4.21.zip");
              ZipInputStream zip = new ZipInputStream(raw)) {
             ZipEntry entry;
@@ -1441,16 +1757,16 @@ public class MainActivity extends Activity {
             while ((entry = zip.getNextEntry()) != null) {
                 File output = new File(staging, entry.getName()).getCanonicalFile();
                 if (!output.getPath().startsWith(base)) {
-                    throw new SecurityException("Unsafe path in Kotlin compiler archive.");
+                    throw new SecurityException("Unsafe path in Kotlin compiler archive: " + entry.getName());
                 }
                 if (entry.isDirectory()) {
                     if (!output.exists() && !output.mkdirs()) {
-                        throw new IllegalStateException("Cannot create compiler folder: " + entry.getName());
+                        throw new IllegalStateException("Cannot create compiler folder: " + output.getAbsolutePath());
                     }
                 } else {
                     File parent = output.getParentFile();
                     if (parent != null && !parent.exists() && !parent.mkdirs()) {
-                        throw new IllegalStateException("Cannot create compiler folder.");
+                        throw new IllegalStateException("Cannot create compiler folder: " + parent.getAbsolutePath());
                     }
                     try (FileOutputStream fileOut = new FileOutputStream(output)) {
                         int count;
@@ -1463,18 +1779,232 @@ public class MainActivity extends Activity {
             deleteTree(staging);
             throw e;
         }
-        File stagedHome = new File(staging, "kotlinc");
-        if (!new File(stagedHome, "lib/kotlin-compiler.jar").isFile()
-                || !new File(stagedHome, "lib/kotlin-stdlib.jar").isFile()) {
+
+        File stagedHome = findKotlinCompilerHome(staging);
+        if (stagedHome == null) {
             deleteTree(staging);
-            throw new IllegalStateException("The bundled Kotlin compiler archive is incomplete.");
+            throw new IllegalStateException("Kotlin compiler archive is invalid. Missing: " +
+                    new File(staging, "*/lib/kotlin-compiler.jar").getAbsolutePath());
+        }
+        try {
+            validateKotlinCompilerHome(stagedHome);
+        } catch (Exception e) {
+            deleteTree(staging);
+            throw e;
+        }
+
+        File normalized = new File(staging, "normalized-kotlinc");
+        if (!stagedHome.equals(normalized) && !stagedHome.renameTo(normalized)) {
+            deleteTree(staging);
+            throw new IllegalStateException("Cannot normalize Kotlin compiler directory: " +
+                    stagedHome.getAbsolutePath());
         }
         deleteTree(destination);
-        if (!staging.renameTo(destination)) {
+        if (!destination.mkdirs()) {
             deleteTree(staging);
-            throw new IllegalStateException("Cannot activate the extracted Kotlin compiler.");
+            throw new IllegalStateException("Cannot create Kotlin compiler destination: " + destination.getAbsolutePath());
         }
-        return getKotlinCompilerHome();
+        File activeHome = new File(destination, "kotlinc");
+        if (!normalized.renameTo(activeHome)) {
+            deleteTree(staging);
+            deleteTree(destination);
+            throw new IllegalStateException("Cannot activate Kotlin compiler at: " + activeHome.getAbsolutePath());
+        }
+        deleteTree(staging);
+        validateKotlinCompilerHome(activeHome);
+        return activeHome;
+    }
+
+    private String kotlinCompilerClasspath(File compilerHome) throws Exception {
+        File lib = new File(compilerHome, "lib");
+        File[] jars = lib.listFiles((dir, name) -> name.endsWith(".jar") && new File(dir, name).isFile());
+        if (jars == null || jars.length == 0) {
+            throw new IllegalStateException("No Kotlin runtime JARs found in: " + lib.getAbsolutePath());
+        }
+        StringBuilder cp = new StringBuilder();
+        for (File jar : jars) {
+            if (cp.length() > 0) cp.append(File.pathSeparator);
+            cp.append(jar.getAbsolutePath());
+        }
+        File compilerJar = new File(lib, "kotlin-compiler.jar");
+        if (!compilerJar.isFile()) throw new IllegalStateException("Missing Kotlin compiler JAR: " + compilerJar.getAbsolutePath());
+        return cp.toString();
+    }
+
+    private String runKotlinJvm(File compilerHome, int timeoutSeconds, String... args) throws Exception {
+        validateKotlinCompilerHome(compilerHome);
+        List<String> command = new ArrayList<>();
+        command.add(getKotlinLauncher().getAbsolutePath());
+        command.add("-Dfile.encoding=UTF-8");
+        command.add("-Duser.home=" + getFilesDir().getAbsolutePath());
+        command.add("-Djava.io.tmpdir=" + getCacheDir().getAbsolutePath());
+        command.add("-Dkotlin.home=" + compilerHome.getAbsolutePath());
+        java.util.Map<String, String> environment = new java.util.HashMap<>();
+        command.add("-cp");
+        command.add(kotlinCompilerClasspath(compilerHome));
+        command.add("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler");
+        java.util.Collections.addAll(command, args);
+        return runNativeJvmCommand(command, timeoutSeconds, environment);
+    }
+
+    private String runNativeJvmCommand(List<String> command, int timeoutSeconds,
+                                       java.util.Map<String, String> extraEnvironment) throws Exception {
+        File outputFile = File.createTempFile("nice-kotlin-process-", ".log", getCacheDir());
+        Process process = null;
+        try {
+            ProcessBuilder builder = new ProcessBuilder(command);
+            builder.directory(getFilesDir());
+            builder.redirectErrorStream(true);
+            builder.redirectOutput(outputFile);
+            java.util.Map<String, String> env = builder.environment();
+            env.put("JAVA_HOME", jdkHome.getAbsolutePath());
+            File tagFix = new File(getApplicationInfo().nativeLibraryDir, "libtagfix.so");
+            if (!tagFix.isFile()) {
+                throw new IllegalStateException("Android heap-tagging compatibility library is missing: " + tagFix.getAbsolutePath());
+            }
+            String existingPreload = env.get("LD_PRELOAD");
+            env.put("LD_PRELOAD", tagFix.getAbsolutePath() +
+                    (existingPreload == null || existingPreload.isEmpty() ? "" : ":" + existingPreload));
+            env.put("KOTLIN_HOME", getKotlinCompilerHome().getAbsolutePath());
+            env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
+            String jdkLib = new File(jdkHome, "lib").getAbsolutePath();
+            String server = new File(jdkHome, "lib/server").getAbsolutePath();
+            String existingLdPath = env.get("LD_LIBRARY_PATH");
+            env.put("LD_LIBRARY_PATH", server + ":" + jdkLib +
+                    (existingLdPath == null || existingLdPath.isEmpty() ? "" : ":" + existingLdPath));
+            env.putAll(extraEnvironment);
+            try {
+                process = builder.start();
+            } catch (java.io.IOException directError) {
+                if (!isPermissionDenied(directError)) throw directError;
+                File linker = new File("/system/bin/linker64");
+                if (!linker.isFile()) throw directError;
+                List<String> linkerCommand = new ArrayList<>();
+                linkerCommand.add(linker.getAbsolutePath());
+                linkerCommand.addAll(command);
+                ProcessBuilder fallback = new ProcessBuilder(linkerCommand);
+                fallback.directory(getFilesDir());
+                fallback.redirectErrorStream(true);
+                fallback.redirectOutput(outputFile);
+                fallback.environment().putAll(env);
+                process = fallback.start();
+            }
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroy();
+                if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly();
+                String partial = outputFile.isFile() ? readText(outputFile) : "";
+                throw new IllegalStateException("Kotlin command timed out after " + timeoutSeconds +
+                        " seconds." + (partial.isEmpty() ? "" : "\n" + partial));
+            }
+            String output = outputFile.isFile() ? readText(outputFile) : "";
+            if (process.exitValue() != 0) {
+                throw new IllegalStateException("Kotlin JVM launcher exited with code " +
+                        process.exitValue() + ": " + output);
+            }
+            return output.trim();
+        } finally {
+            if (process != null && process.isAlive()) process.destroyForcibly();
+            if (outputFile.exists()) outputFile.delete();
+        }
+    }
+
+    private String kotlinProjectFingerprint(List<File> sources, String classpath) throws Exception {
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        java.util.Collections.sort(sources, (left, right) ->
+                left.getAbsolutePath().compareTo(right.getAbsolutePath()));
+        for (File source : sources) {
+            digest.update(source.getAbsolutePath().getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            try (InputStream in = new FileInputStream(source)) {
+                byte[] buffer = new byte[16 * 1024];
+                int count;
+                while ((count = in.read(buffer)) != -1) digest.update(buffer, 0, count);
+            }
+            digest.update((byte) 0);
+        }
+        digest.update(classpath.getBytes(StandardCharsets.UTF_8));
+        digest.update(getKotlinCompilerHome().getAbsolutePath().getBytes(StandardCharsets.UTF_8));
+        byte[] bytes = digest.digest();
+        StringBuilder result = new StringBuilder();
+        for (byte value : bytes) result.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
+        return result.toString();
+    }
+
+    private File ensureKotlinProjectBuilt(File compilerHome, List<File> sources,
+                                          String projectClasspath) throws Exception {
+        File buildDirectory = new File(getFilesDir(), "kotlin-build");
+        if (!buildDirectory.exists() && !buildDirectory.mkdirs()) {
+            throw new IllegalStateException("Cannot create Kotlin build folder: " + buildDirectory.getAbsolutePath());
+        }
+        File outputJar = new File(buildDirectory, "nice-kotlin-program.jar");
+        File fingerprintFile = new File(buildDirectory, "nice-kotlin-program.sha256");
+        String fingerprint = kotlinProjectFingerprint(new ArrayList<>(sources), projectClasspath);
+        if (outputJar.isFile() && outputJar.length() > 0 && fingerprintFile.isFile()
+                && fingerprint.equals(readText(fingerprintFile).trim())) {
+            return outputJar;
+        }
+
+        File temporaryJar = new File(buildDirectory, "nice-kotlin-program.tmp.jar");
+        if (temporaryJar.exists() && !temporaryJar.delete()) {
+            throw new IllegalStateException("Cannot remove stale Kotlin temporary output: " + temporaryJar.getAbsolutePath());
+        }
+        List<String> compilerArgs = new ArrayList<>();
+        compilerArgs.add("-kotlin-home");
+        compilerArgs.add(compilerHome.getAbsolutePath());
+        compilerArgs.add("-no-stdlib");
+        compilerArgs.add("-no-reflect");
+        compilerArgs.add("-include-runtime");
+        compilerArgs.add("-classpath");
+        compilerArgs.add(projectClasspath);
+        compilerArgs.add("-d");
+        compilerArgs.add(temporaryJar.getAbsolutePath());
+        for (File source : sources) compilerArgs.add(source.getAbsolutePath());
+
+        runKotlinJvm(compilerHome, 180, compilerArgs.toArray(new String[0]));
+        if (!temporaryJar.isFile() || temporaryJar.length() == 0) {
+            throw new IllegalStateException("Kotlin compiler completed without creating output JAR: " +
+                    temporaryJar.getAbsolutePath());
+        }
+        if (outputJar.exists() && !outputJar.delete()) {
+            throw new IllegalStateException("Cannot replace cached Kotlin JAR: " + outputJar.getAbsolutePath());
+        }
+        if (!temporaryJar.renameTo(outputJar)) {
+            throw new IllegalStateException("Cannot activate compiled Kotlin JAR: " + outputJar.getAbsolutePath());
+        }
+        writeText(fingerprintFile, fingerprint);
+        return outputJar;
+    }
+
+
+    private String findKotlinMainClass(File outputJar, String preferredClass) throws Exception {
+        // Prefer the file-facade class derived from the active Kotlin filename.
+        List<String> candidates = new ArrayList<>();
+        if (preferredClass != null && !preferredClass.isEmpty()) candidates.add(preferredClass);
+
+        // Inspect the compiled JAR and ask javap which class actually exposes main(String[]).
+        try (java.util.jar.JarFile jar = new java.util.jar.JarFile(outputJar)) {
+            java.util.Enumeration<java.util.jar.JarEntry> entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                java.util.jar.JarEntry entry = entries.nextElement();
+                String name = entry.getName();
+                if (!entry.isDirectory() && name.endsWith("Kt.class") && !name.contains("$")) {
+                    String className = name.substring(0, name.length() - 6).replace('/', '.');
+                    if (!candidates.contains(className)) candidates.add(className);
+                }
+            }
+        }
+        File javap = new File(jdkHome, "bin/javap");
+        if (!javap.isFile()) throw new IllegalStateException("JDK javap tool is missing; cannot locate Kotlin main() class.");
+        for (String candidate : candidates) {
+            try {
+                String details = runJdkCommand(javap, 30, "-classpath", outputJar.getAbsolutePath(), "-public", candidate);
+                if (details.matches("(?s).*\\bmain\\(java\\.lang\\.String\\[\\]\\).*")) return candidate;
+            } catch (Exception ignored) {
+                // This candidate may not exist in the JAR; continue with the next compiled file facade.
+            }
+        }
+        throw new IllegalStateException("Kotlin compilation succeeded, but no generated class with main(String[]) was found in " + outputJar.getAbsolutePath());
     }
 
     private void runKotlinProject() {
@@ -1497,52 +2027,26 @@ public class MainActivity extends Activity {
                 }
                 ensureJavaLibrariesInstalled();
                 String projectLibraryClasspath = getJavaLibrariesClasspath();
-                setIdeStatus("Checking Kotlin compiler…");
                 File compilerHome = ensureKotlinCompilerInstalled();
-                File compilerLib = new File(compilerHome, "lib");
-                String compilerClassPath = new File(compilerLib, "*").getAbsolutePath();
                 String extension = getCurrentExtension();
                 if ("kts".equals(extension)) {
-                    setIdeStatus("Compiling and running Kotlin script…");
-                    String output = runJdkCommand(new File(jdkHome, "bin/java"), 120,
-                            "-cp", compilerClassPath,
-                            "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
-                            "-kotlin-home", compilerHome.getAbsolutePath(),
-                            "-classpath", projectLibraryClasspath,
-                            "-script", currentFile.getAbsolutePath());
+                    List<String> args = new ArrayList<>();
+                    args.add("-kotlin-home");
+                    args.add(compilerHome.getAbsolutePath());
+                    args.add("-classpath");
+                    args.add(projectLibraryClasspath);
+                    args.add("-script");
+                    args.add(currentFile.getAbsolutePath());
+                    String output = runKotlinJvm(compilerHome, 120, args.toArray(new String[0]));
                     success = true;
                     report = "KOTLIN SCRIPT SUCCESSFUL\n\n" +
                             (output.isEmpty() ? "(Script finished with no output)" : output);
                 } else {
-                    setIdeStatus("Checking Kotlin project build…");
                     List<File> sources = new ArrayList<>();
                     collectKotlinFiles(workspace, sources);
                     if (sources.isEmpty()) throw new IllegalStateException("No .kt source files found in Workspace.");
-                    File buildDirectory = new File(getFilesDir(), "kotlin-build");
-                    if (!buildDirectory.exists() && !buildDirectory.mkdirs()) {
-                        throw new IllegalStateException("Cannot create Kotlin build folder.");
-                    }
-                    File outputJar = new File(buildDirectory, "nice-kotlin-program.jar");
-                    if (outputJar.exists() && !outputJar.delete()) {
-                        throw new IllegalStateException("Cannot replace previous Kotlin build output.");
-                    }
-                    List<String> compilerArgs = new ArrayList<>();
-                    compilerArgs.add("-kotlin-home");
-                    compilerArgs.add(compilerHome.getAbsolutePath());
-                    compilerArgs.add("-include-runtime");
-                    compilerArgs.add("-classpath");
-                    compilerArgs.add(projectLibraryClasspath);
-                    compilerArgs.add("-d");
-                    compilerArgs.add(outputJar.getAbsolutePath());
-                    for (File source : sources) compilerArgs.add(source.getAbsolutePath());
-                    List<String> command = new ArrayList<>();
-                    command.add("-cp");
-                    command.add(compilerClassPath);
-                    command.add("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler");
-                    command.addAll(compilerArgs);
-                    setIdeStatus("Compiling Kotlin project…");
-                    runJdkCommand(new File(jdkHome, "bin/java"), 180, command.toArray(new String[0]));
-                    setIdeStatus("Kotlin compilation successful • starting program…");
+                    setIdeStatus("Building Kotlin project…");
+                    File outputJar = ensureKotlinProjectBuilt(compilerHome, sources, projectLibraryClasspath);
 
                     String sourceText = readText(currentFile);
                     java.util.regex.Matcher packageMatcher = java.util.regex.Pattern
@@ -1551,13 +2055,18 @@ public class MainActivity extends Activity {
                     String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
                     String fileName = currentFile.getName();
                     String className = fileName.substring(0, fileName.length() - 3) + "Kt";
-                    String mainClass = packageName.isEmpty() ? className : packageName + "." + className;
-                    setIdeStatus("Running Kotlin program…");
+                    String preferredClass = packageName.isEmpty() ? className : packageName + "." + className;
+                    String mainClass = findKotlinMainClass(outputJar, preferredClass);
                     String output = runJdkCommand(new File(jdkHome, "bin/java"), 60,
                             "-Dfile.encoding=UTF-8", "-cp",
                             outputJar.getAbsolutePath() + File.pathSeparator + projectLibraryClasspath, mainClass);
                     success = true;
-                    report = cleanProgramOutput(output);
+                    report = "KOTLIN BUILD SUCCESSFUL\n" +
+                            sources.size() + " Kotlin source file(s) " +
+                            (new File(getFilesDir(), "kotlin-build/nice-kotlin-program.sha256").isFile()
+                                    ? "checked against build cache." : "compiled.") +
+                            "\n\nRUN: " + mainClass + "\n\n" +
+                            (output.isEmpty() ? "(Program finished with no output)" : output);
                 }
             } catch (Exception e) {
                 report = "KOTLIN BUILD / RUN FAILED\n\n" + e.getMessage();
@@ -1652,7 +2161,17 @@ public class MainActivity extends Activity {
         MessageDigest digest = MessageDigest.getInstance("SHA-256"); byte[] buffer = new byte[32768];
         for (File file : inputs) {
             digest.update(file.getAbsolutePath().getBytes(StandardCharsets.UTF_8));
-            try (InputStream in = new FileInputStream(file)) { int n; while ((n = in.read(buffer)) != -1) digest.update(buffer, 0, n); }
+            String lower = file.getName().toLowerCase(java.util.Locale.ROOT);
+            if (lower.endsWith(".jar")) {
+                // Bundled dependency JARs are immutable after installation.
+                // Metadata avoids re-reading hundreds of MB on every Run.
+                digest.update(Long.toString(file.length()).getBytes(StandardCharsets.UTF_8));
+                digest.update(Long.toString(file.lastModified()).getBytes(StandardCharsets.UTF_8));
+            } else {
+                try (InputStream in = new FileInputStream(file)) {
+                    int n; while ((n = in.read(buffer)) != -1) digest.update(buffer, 0, n);
+                }
+            }
         }
         StringBuilder hex = new StringBuilder();
         for (byte value : digest.digest()) hex.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
@@ -1845,6 +2364,13 @@ public class MainActivity extends Activity {
             builder.redirectOutput(outputFile);
             java.util.Map<String, String> env = builder.environment();
             env.put("JAVA_HOME", jdkHome.getAbsolutePath());
+            File tagFix = new File(getApplicationInfo().nativeLibraryDir, "libtagfix.so");
+            if (!tagFix.isFile()) {
+                throw new IllegalStateException("Android heap-tagging compatibility library is missing: " + tagFix.getAbsolutePath());
+            }
+            String existingPreload = env.get("LD_PRELOAD");
+            env.put("LD_PRELOAD", tagFix.getAbsolutePath() +
+                    (existingPreload == null || existingPreload.isEmpty() ? "" : ":" + existingPreload));
             env.put("PATH", new File(jdkHome, "bin").getAbsolutePath() + ":" + env.get("PATH"));
             String lib = new File(jdkHome, "lib").getAbsolutePath();
             String server = new File(jdkHome, "lib/server").getAbsolutePath();

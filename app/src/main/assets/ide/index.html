@@ -93,19 +93,25 @@ body.dark .header,body.dark .ribbon,body.dark .status{background:#0d1523}body.da
  const languageInfo={
   java:{mode:'nicejava',label:'JAVA',name:'Main.java',sample:'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Nice Java IDE!");\n    }\n}\n'},
   kotlin:{mode:'nicekotlin',label:'KOTLIN',name:'Main.kt',sample:'fun main() {\n    println(\"Hello from Nice Kotlin IDE!\")\n}\n'},
-  html:{mode:'nicehtml',label:'HTML',name:'index.html',sample:'<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <title>My Page</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Hello World</h1>\n  <script src="script.js"><\\/script>\n</body>\n</html>\n'},
+  html:{mode:'nicehtml',label:'HTML',name:'index.html',sample:'<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <title>My Page</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Hello World</h1>\n  \x3Cscript src="script.js">\x3C/script\x3E\n</body>\n</html>\n'},
   css:{mode:'nicecss',label:'CSS',name:'style.css',sample:'body {\n  margin: 0;\n  font-family: Arial, sans-serif;\n}\n'},
   js:{mode:'nicejs',label:'JAVASCRIPT',name:'script.js',sample:'function greet() {\n  console.log("Hello World");\n}\n\ngreet();\n'}
  };
  languageSelect.addEventListener('change',function(){
   const info=languageInfo[this.value];
-  editor.setOption('mode',info.mode);
-  document.getElementById('fileName').textContent=info.name;
-  document.getElementById('fileType').textContent=info.label;
-  editor.setValue(info.sample);
-  editor.refresh();
-  editor.focus();
-  report(info.label+' editor selected • use Save As and keep '+info.name);
+  try{
+   if(!window.NativeIDE||typeof NativeIDE.selectLanguage!=='function'){
+    report('Android language bridge unavailable • reload app');return;
+   }
+   NativeIDE.selectLanguage(info.name.split('.').pop(),info.sample);
+   editor.setOption('mode',info.mode);
+   document.getElementById('fileName').textContent=info.name;
+   document.getElementById('fileType').textContent=info.label;
+   editor.setValue(info.sample);
+   editor.refresh();
+   editor.focus();
+   report(info.label+' editor selected • '+info.name);
+  }catch(e){report('Language switch error: '+e.message)}
  });
  editor.on('change',sync);
  editor.on('focus',function(){document.body.classList.add('editor-focused')});
