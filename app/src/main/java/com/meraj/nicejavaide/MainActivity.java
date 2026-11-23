@@ -71,6 +71,7 @@ public class MainActivity extends ComponentActivity {
     private boolean restoringEditor = false;
     private static final int HISTORY_LIMIT = 100;
     private File jdkHome;
+    private volatile boolean jdkInstallInProgress = false;
     private int pendingPickerRequest;
     private final ActivityResultLauncher<Intent> documentPicker = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(), result ->
@@ -1210,6 +1211,11 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void extractBundledJdk() {
+        if (jdkInstallInProgress) {
+            Toast.makeText(this, "JDK installation is already running", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        jdkInstallInProgress = true;
         android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
         progress.setTitle("Installing OpenJDK 21");
         progress.setMessage("Extracting full offline toolchain…");
@@ -1222,8 +1228,10 @@ public class MainActivity extends ComponentActivity {
             boolean success = false;
             String error = null;
             try {
-                deleteTree(staging);
-                if (!staging.mkdirs()) throw new IllegalStateException("Cannot create JDK folder");
+                deleteJdkTreeStrict(staging);
+                if (!staging.mkdir() && !staging.isDirectory()) {
+                    throw new IllegalStateException("Cannot create JDK staging folder: " + staging.getAbsolutePath());
+                }
                 try (InputStream raw = openBundledJdkArchive();
                      java.io.PushbackInputStream probe = new java.io.PushbackInputStream(raw, 2)) {
                     int first = probe.read();
@@ -1289,17 +1297,30 @@ public class MainActivity extends ComponentActivity {
                 File home = findJdkHome(staging, 0);
                 if (home == null) throw new IllegalStateException("JDK bin/java and bin/javac were not found in the archive");
                 File destination = jdkHome;
-                deleteTree(destination);
-                if (!destination.mkdirs() && !destination.isDirectory()) {
-                    throw new IllegalStateException("Cannot create final JDK directory: " + destination);
+                deleteJdkTreeStrict(destination);
+                if (!destination.mkdir() && !destination.isDirectory()) {
+                    throw new IllegalStateException("Cannot create final JDK directory: " + destination.getAbsolutePath());
                 }
                 // File.renameTo() is unreliable for nested directories on Android
                 // when the extracted tree contains symlinks/hardlinks. Copy the
                 // already-validated tree entry-by-entry, preserving symlinks.
                 copyJdkTree(home, destination);
-                if (!new File(destination, "bin/javac").isFile() ||
-                        !new File(destination, "lib/modules").isFile()) {
-                    throw new IllegalStateException("JDK copy to final directory is incomplete");
+                File sourceJavac = new File(home, "bin/javac");
+                File copiedJavac = new File(destination, "bin/javac");
+                File sourceModules = new File(home, "lib/modules");
+                File copiedModules = new File(destination, "lib/modules");
+                boolean javacCopied = copiedJavac.isFile();
+                boolean modulesCopied = copiedModules.isFile();
+                boolean modulesSizeMatches = modulesCopied && sourceModules.isFile() &&
+                        copiedModules.length() == sourceModules.length();
+                if (!javacCopied || !modulesCopied || !modulesSizeMatches) {
+                    throw new IllegalStateException("JDK copy verification failed. javac source=" +
+                            sourceJavac.isFile() + " (" + sourceJavac.length() + " bytes), destination=" +
+                            javacCopied + " (" + copiedJavac.length() + " bytes); lib/modules source=" +
+                            sourceModules.isFile() + " (" + sourceModules.length() + " bytes), destination=" +
+                            modulesCopied + " (" + copiedModules.length() + " bytes). Free internal storage=" +
+                            android.text.format.Formatter.formatShortFileSize(this,
+                                    new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes()));
                 }
                 deleteTree(staging);
                 jdkHome = destination;
@@ -1331,11 +1352,14 @@ public class MainActivity extends ComponentActivity {
                 success = true;
             } catch (Exception e) {
                 error = e.getClass().getSimpleName() + ": " + e.getMessage();
-                deleteTree(staging);
+                try { deleteJdkTreeStrict(staging); } catch (Exception cleanup) {
+                    error += " | Staging cleanup failed: " + cleanup.getMessage();
+                }
             }
             final boolean installed = success;
             final String failure = error;
             runOnUiThread(() -> {
+                jdkInstallInProgress = false;
                 progress.dismiss();
                 if (installed) {
                     status.setText("OpenJDK 21 extracted • native runtime test pending");
@@ -1471,6 +1495,35 @@ public class MainActivity extends ComponentActivity {
                 "\\n\\nFiles extracted. Native process execution still needs device verification.";
         new android.app.AlertDialog.Builder(this).setTitle("OpenJDK 21")
                 .setMessage(message).setPositiveButton("OK", null).show();
+    }
+
+    // Delete JDK installation trees without following symbolic links. File.exists()
+    // and File.isDirectory() follow links, which can leave dangling links behind or
+    // recursively delete a link target. lstat/unlink/rmdir make retries deterministic.
+    private void deleteJdkTreeStrict(File file) throws Exception {
+        if (file == null) return;
+        android.system.StructStat stat;
+        try {
+            stat = android.system.Os.lstat(file.getAbsolutePath());
+        } catch (android.system.ErrnoException missing) {
+            if (missing.errno == android.system.OsConstants.ENOENT) return;
+            throw missing;
+        }
+        int type = stat.st_mode & android.system.OsConstants.S_IFMT;
+        if (type == android.system.OsConstants.S_IFDIR) {
+            File[] children = file.listFiles();
+            if (children == null) throw new IllegalStateException("Cannot list JDK cleanup folder: " + file);
+            for (File child : children) deleteJdkTreeStrict(child);
+            android.system.Os.rmdir(file.getAbsolutePath());
+        } else {
+            android.system.Os.unlink(file.getAbsolutePath());
+        }
+        try {
+            android.system.Os.lstat(file.getAbsolutePath());
+            throw new IllegalStateException("Could not remove stale JDK path: " + file.getAbsolutePath());
+        } catch (android.system.ErrnoException missing) {
+            if (missing.errno != android.system.OsConstants.ENOENT) throw missing;
+        }
     }
 
     private void deleteTree(File file) {
