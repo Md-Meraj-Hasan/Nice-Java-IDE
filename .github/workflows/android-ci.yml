@@ -43,6 +43,19 @@ jobs:
                   for m in module_files:
                       print(f"{label}: modules isfile={m.isfile()} islnk={m.islnk()} "
                             f"issym={m.issym()} size={m.size}", flush=True)
+                  if label == "complete":
+                      names = {m.name.rstrip("/"): m for m in archive.getmembers()}
+                      required = ["./bin/java", "./bin/javac", "./lib/modules"]
+                      missing = [name for name in required if name not in names]
+                      if missing:
+                          raise SystemExit("Complete JDK archive missing required paths: " + repr(missing))
+                      if not names["./lib/modules"].isdir():
+                          raise SystemExit("Complete JDK lib/modules must be an exploded directory")
+                      module_children = [m for m in archive.getmembers()
+                                         if m.name.startswith("./lib/modules/")]
+                      if not module_children:
+                          raise SystemExit("Complete JDK lib/modules directory is empty")
+                      print("PASS: complete JDK has bin/java, bin/javac and populated exploded lib/modules", flush=True)
           PY
 
       - name: Set up Node.js for preview tests
