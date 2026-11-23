@@ -14,6 +14,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Inspect the exact Android JDK release archives
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, tarfile, urllib.request
+          assets = {
+              "selected": "https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.14/jdk21-android-arm64.tar.gz",
+              "complete": "https://github.com/MobileStudio-AndroidIDE/MobileStudio_AndroidIDE/releases/download/jdk21-android-21.0.14/jdk21-android-arm64-complete.tar.gz",
+          }
+          for label, url in assets.items():
+              path = f"/tmp/{label}-jdk.tar.gz"
+              print(f"Downloading {label} archive: {url}", flush=True)
+              urllib.request.urlretrieve(url, path)
+              digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+              print(f"{label} sha256={digest}", flush=True)
+              with tarfile.open(path, "r:gz") as archive:
+                  matches = [m for m in archive.getmembers()
+                             if "modules" in m.name.lower() or m.name.endswith("/bin/java") or m.name.endswith("/bin/javac")]
+                  for m in matches:
+                      print(f"{label} ENTRY name={m.name!r} type={m.type!r} size={m.size} "
+                            f"issparse={m.issparse()} linkname={m.linkname!r} "
+                            f"pax={m.pax_headers}", flush=True)
+                  module_files = [m for m in archive.getmembers()
+                                  if m.name.rstrip("/").endswith("lib/modules")]
+                  if not module_files:
+                      print(f"{label}: NO lib/modules entry in archive", flush=True)
+                  for m in module_files:
+                      print(f"{label}: modules isfile={m.isfile()} islnk={m.islnk()} "
+                            f"issym={m.issym()} size={m.size}", flush=True)
+          PY
+
       - name: Set up Node.js for preview tests
         uses: actions/setup-node@v7
         with:
