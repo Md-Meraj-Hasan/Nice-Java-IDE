@@ -1514,9 +1514,9 @@ public class MainActivity extends ComponentActivity {
             File[] children = file.listFiles();
             if (children == null) throw new IllegalStateException("Cannot list JDK cleanup folder: " + file);
             for (File child : children) deleteJdkTreeStrict(child);
-            android.system.Os.rmdir(file.getAbsolutePath());
+            if (!file.delete()) throw new IllegalStateException("Cannot remove JDK directory: " + file.getAbsolutePath());
         } else {
-            android.system.Os.unlink(file.getAbsolutePath());
+            if (!file.delete()) throw new IllegalStateException("Cannot remove JDK entry: " + file.getAbsolutePath());
         }
         try {
             android.system.Os.lstat(file.getAbsolutePath());
