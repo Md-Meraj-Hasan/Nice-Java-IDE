@@ -1061,7 +1061,7 @@ public class MainActivity extends ComponentActivity {
         File java = new File(jdkHome, "bin/java");
         File javac = new File(jdkHome, "bin/javac");
         File runtime = new File(jdkHome, "lib/modules");
-        return java.isFile() && javac.isFile() && runtime.isFile();
+        return java.isFile() && javac.isFile() && runtime.isDirectory() && runtime.list() != null && runtime.list().length > 0;
     }
 
     private File getJavaLibrariesDirectory() {
