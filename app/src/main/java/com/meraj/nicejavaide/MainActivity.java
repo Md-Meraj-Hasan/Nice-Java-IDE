@@ -1282,7 +1282,13 @@ public class MainActivity extends ComponentActivity {
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create hardlink folder");
                             android.system.Os.link(target.getAbsolutePath(), output.getAbsolutePath());
-                        } else if (entry.isFile()) {
+                        } else if (entry.isFile() || entry.isSparse()) {
+                            // OpenJDK's large lib/modules image may be stored as a GNU/PAX
+                            // sparse TAR entry. TarArchiveEntry.isFile() is false for sparse
+                            // entries even though TarArchiveInputStream can expand/read them.
+                            // Treat sparse entries as regular output files; otherwise the
+                            // extractor silently skips lib/modules and javac is the only
+                            // apparently valid file left in the JDK tree.
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create " + parent);
                             try (FileOutputStream out = new FileOutputStream(output)) {
