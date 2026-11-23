@@ -1316,22 +1316,24 @@ public class MainActivity extends ComponentActivity {
                 File copiedJavac = new File(destination, "bin/javac");
                 File sourceModules = new File(home, "lib/modules");
                 File copiedModules = new File(destination, "lib/modules");
-                if (!sourceModules.isFile()) {
-                    throw new IllegalStateException("JDK archive did not produce lib/modules. " +
-                            "Expected extracted path: " + sourceModules.getAbsolutePath() +
-                            "; modules TAR entries are now force-extracted when they contain data. " +
-                            "Check archive layout and sparse-entry metadata.");
+                if (!sourceModules.isDirectory()) {
+                    throw new IllegalStateException("JDK archive did not produce the expected exploded lib/modules directory: " +
+                            sourceModules.getAbsolutePath() + ". This build must use the complete Android JDK archive.");
                 }
                 boolean javacCopied = copiedJavac.isFile();
-                boolean modulesCopied = copiedModules.isFile();
-                boolean modulesSizeMatches = modulesCopied && sourceModules.isFile() &&
-                        copiedModules.length() == sourceModules.length();
-                if (!javacCopied || !modulesCopied || !modulesSizeMatches) {
+                boolean modulesCopied = copiedModules.isDirectory();
+                File[] sourceModuleEntries = sourceModules.listFiles();
+                File[] copiedModuleEntries = copiedModules.listFiles();
+                int sourceModuleCount = sourceModuleEntries == null ? 0 : sourceModuleEntries.length;
+                int copiedModuleCount = copiedModuleEntries == null ? 0 : copiedModuleEntries.length;
+                boolean modulesCopiedCorrectly = modulesCopied && sourceModuleCount > 0 &&
+                        copiedModuleCount == sourceModuleCount;
+                if (!javacCopied || !modulesCopiedCorrectly) {
                     throw new IllegalStateException("JDK copy verification failed. javac source=" +
                             sourceJavac.isFile() + " (" + sourceJavac.length() + " bytes), destination=" +
-                            javacCopied + " (" + copiedJavac.length() + " bytes); lib/modules source=" +
-                            sourceModules.isFile() + " (" + sourceModules.length() + " bytes), destination=" +
-                            modulesCopied + " (" + copiedModules.length() + " bytes). Free internal storage=" +
+                            javacCopied + " (" + copiedJavac.length() + " bytes); lib/modules directory source=" +
+                            sourceModules.isDirectory() + " (entries=" + sourceModuleCount + "), destination=" +
+                            modulesCopied + " (entries=" + copiedModuleCount + "). Free internal storage=" +
                             android.text.format.Formatter.formatShortFileSize(this,
                                     new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes()));
                 }
@@ -1351,11 +1353,11 @@ public class MainActivity extends ComponentActivity {
                 File modulesFile = new File(jdkHome, "lib/modules");
                 if (javaBinary.isFile()) javaBinary.setExecutable(true, false);
                 if (javacBinary.isFile()) javacBinary.setExecutable(true, false);
-                if (!javaBinary.isFile() || !javacBinary.isFile() || !modulesFile.isFile()) {
+                if (!javaBinary.isFile() || !javacBinary.isFile() || !modulesFile.isDirectory()) {
                     throw new IllegalStateException("Extracted JDK is incomplete. java=" +
                             javaBinary.isFile() + " (" + javaBinary.getAbsolutePath() + ")" +
                             ", javac=" + javacBinary.isFile() + " (" + javacBinary.getAbsolutePath() + ")" +
-                            ", lib/modules=" + modulesFile.isFile() +
+                            ", lib/modules directory=" + modulesFile.isDirectory() +
                             ". Extracted folder: " + jdkHome.getAbsolutePath());
                 }
                 if (!javaBinary.canExecute() || !javacBinary.canExecute()) {
