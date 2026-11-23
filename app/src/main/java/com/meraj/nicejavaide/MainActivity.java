@@ -1248,6 +1248,8 @@ public class MainActivity extends ComponentActivity {
                     byte[] buffer = new byte[64 * 1024];
                     while ((entry = tar.getNextTarEntry()) != null) {
                         String entryName = entry.getName();
+                        String normalizedEntryName = entryName.replace('\\\\', '/');
+                        boolean isModulesEntry = normalizedizedModulesEntry(normalizedEntryName);
                         // Treat the extraction staging folder as the archive's parent root.
                         // Some JDK tar entries intentionally use one leading-directory
                         // traversal (for example lib/../../support/...). Resolve that
@@ -1282,13 +1284,12 @@ public class MainActivity extends ComponentActivity {
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create hardlink folder");
                             android.system.Os.link(target.getAbsolutePath(), output.getAbsolutePath());
-                        } else if (entry.isFile() || entry.isSparse()) {
-                            // OpenJDK's large lib/modules image may be stored as a GNU/PAX
-                            // sparse TAR entry. TarArchiveEntry.isFile() is false for sparse
-                            // entries even though TarArchiveInputStream can expand/read them.
-                            // Treat sparse entries as regular output files; otherwise the
-                            // extractor silently skips lib/modules and javac is the only
-                            // apparently valid file left in the JDK tree.
+                        } else if (entry.isFile() || entry.isSparse() || entry.getSize() > 0 || isModulesEntry) {
+                            // Some GNU/PAX TAR producers expose data-bearing entries with a
+                            // non-standard type flag. Do not silently skip a non-empty entry:
+                            // OpenJDK's lib/modules image is essential and may be sparse.
+                            // The explicit modules-path fallback also captures a zero-reported-
+                            // size sparse entry so the TAR stream can provide its expanded data.
                             File parent = output.getParentFile();
                             if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create " + parent);
                             try (FileOutputStream out = new FileOutputStream(output)) {
@@ -1315,6 +1316,12 @@ public class MainActivity extends ComponentActivity {
                 File copiedJavac = new File(destination, "bin/javac");
                 File sourceModules = new File(home, "lib/modules");
                 File copiedModules = new File(destination, "lib/modules");
+                if (!sourceModules.isFile()) {
+                    throw new IllegalStateException("JDK archive did not produce lib/modules. " +
+                            "Expected extracted path: " + sourceModules.getAbsolutePath() +
+                            "; modules TAR entries are now force-extracted when they contain data. " +
+                            "Check archive layout and sparse-entry metadata.");
+                }
                 boolean javacCopied = copiedJavac.isFile();
                 boolean modulesCopied = copiedModules.isFile();
                 boolean modulesSizeMatches = modulesCopied && sourceModules.isFile() &&
@@ -1378,6 +1385,13 @@ public class MainActivity extends ComponentActivity {
                 }
             });
         }, "Jdk21-Extractor").start();
+    }
+
+    private boolean normalizedizedModulesEntry(String entryName) {
+        if (entryName == null) return false;
+        String value = entryName.replace('\\\\', '/');
+        while (value.startsWith("./")) value = value.substring(2);
+        return value.equals("lib/modules") || value.endsWith("/lib/modules");
     }
 
     // Normalize archive names lexically before resolving them on disk. This
