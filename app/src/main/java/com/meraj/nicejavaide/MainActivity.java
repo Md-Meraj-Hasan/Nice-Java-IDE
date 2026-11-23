@@ -1061,7 +1061,8 @@ public class MainActivity extends ComponentActivity {
         File java = new File(jdkHome, "bin/java");
         File javac = new File(jdkHome, "bin/javac");
         File runtime = new File(jdkHome, "lib/modules");
-        return java.isFile() && javac.isFile() && runtime.isDirectory() && runtime.list() != null && runtime.list().length > 0;
+        return java.isFile() && javac.isFile() && runtime.isFile() &&
+                runtime.length() >= 1024L * 1024L && runtime.canRead();
     }
 
     private File getJavaLibrariesDirectory() {
@@ -1316,24 +1317,20 @@ public class MainActivity extends ComponentActivity {
                 File copiedJavac = new File(destination, "bin/javac");
                 File sourceModules = new File(home, "lib/modules");
                 File copiedModules = new File(destination, "lib/modules");
-                if (!sourceModules.isDirectory()) {
-                    throw new IllegalStateException("JDK archive did not produce the expected exploded lib/modules directory: " +
-                            sourceModules.getAbsolutePath() + ". This build must use the complete Android JDK archive.");
-                }
-                boolean javacCopied = copiedJavac.isFile();
-                boolean modulesCopied = copiedModules.isDirectory();
-                File[] sourceModuleEntries = sourceModules.listFiles();
-                File[] copiedModuleEntries = copiedModules.listFiles();
-                int sourceModuleCount = sourceModuleEntries == null ? 0 : sourceModuleEntries.length;
-                int copiedModuleCount = copiedModuleEntries == null ? 0 : copiedModuleEntries.length;
-                boolean modulesCopiedCorrectly = modulesCopied && sourceModuleCount > 0 &&
-                        copiedModuleCount == sourceModuleCount;
-                if (!javacCopied || !modulesCopiedCorrectly) {
+                // In a standard OpenJDK image, lib/modules is the binary jimage
+                // file, NOT a directory. Treating it as a directory creates an
+                // unusable JDK even when TAR extraction itself succeeded.
+                boolean sourceModulesValid = sourceModules.isFile() && sourceModules.length() >= 1024L * 1024L;
+                boolean copiedModulesValid = copiedModules.isFile() && copiedModules.length() == sourceModules.length() &&
+                        copiedModules.length() >= 1024L * 1024L;
+                boolean javacCopied = copiedJavac.isFile() && copiedJavac.length() == sourceJavac.length();
+                if (!sourceModulesValid || !copiedModulesValid || !javacCopied) {
                     throw new IllegalStateException("JDK copy verification failed. javac source=" +
                             sourceJavac.isFile() + " (" + sourceJavac.length() + " bytes), destination=" +
-                            javacCopied + " (" + copiedJavac.length() + " bytes); lib/modules directory source=" +
-                            sourceModules.isDirectory() + " (entries=" + sourceModuleCount + "), destination=" +
-                            modulesCopied + " (entries=" + copiedModuleCount + "). Free internal storage=" +
+                            copiedJavac.isFile() + " (" + copiedJavac.length() + " bytes); lib/modules source=" +
+                            sourceModules.isFile() + " (" + sourceModules.length() + " bytes), destination=" +
+                            copiedModules.isFile() + " (" + copiedModules.length() + " bytes). " +
+                            "Expected lib/modules to be a populated regular jimage file. Free internal storage=" +
                             android.text.format.Formatter.formatShortFileSize(this,
                                     new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes()));
                 }
@@ -1353,16 +1350,27 @@ public class MainActivity extends ComponentActivity {
                 File modulesFile = new File(jdkHome, "lib/modules");
                 if (javaBinary.isFile()) javaBinary.setExecutable(true, false);
                 if (javacBinary.isFile()) javacBinary.setExecutable(true, false);
-                if (!javaBinary.isFile() || !javacBinary.isFile() || !modulesFile.isDirectory()) {
+                if (!javaBinary.isFile() || !javacBinary.isFile() ||
+                        !modulesFile.isFile() || modulesFile.length() < 1024L * 1024L || !modulesFile.canRead()) {
                     throw new IllegalStateException("Extracted JDK is incomplete. java=" +
                             javaBinary.isFile() + " (" + javaBinary.getAbsolutePath() + ")" +
                             ", javac=" + javacBinary.isFile() + " (" + javacBinary.getAbsolutePath() + ")" +
-                            ", lib/modules directory=" + modulesFile.isDirectory() +
-                            ". Extracted folder: " + jdkHome.getAbsolutePath());
+                            ", lib/modules regular file=" + modulesFile.isFile() +
+                            " (" + modulesFile.length() + " bytes, readable=" + modulesFile.canRead() + ")" +
+                            ". Expected a populated OpenJDK jimage file. Extracted folder: " + jdkHome.getAbsolutePath());
                 }
                 if (!javaBinary.canExecute() || !javacBinary.canExecute()) {
                     throw new IllegalStateException("JDK files exist but Android could not mark them executable. java executable=" +
                             javaBinary.canExecute() + ", javac executable=" + javacBinary.canExecute());
+                }
+                // Do not report installation success based on file presence alone.
+                // Launch both native tools now so a bad/missing jimage is caught here,
+                // instead of failing later on every Java and Kotlin build.
+                String javaSmoke = runJdkCommand(javaBinary, 60, "-version");
+                String javacSmoke = runJdkCommand(javacBinary, 60, "-version");
+                if (javaSmoke.isEmpty() || javacSmoke.isEmpty()) {
+                    throw new IllegalStateException("OpenJDK native smoke test returned no version output. java=[" +
+                            javaSmoke + "], javac=[" + javacSmoke + "]");
                 }
                 success = true;
             } catch (Exception e) {
