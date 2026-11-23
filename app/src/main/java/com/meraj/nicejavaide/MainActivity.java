@@ -1248,8 +1248,8 @@ public class MainActivity extends ComponentActivity {
                     byte[] buffer = new byte[64 * 1024];
                     while ((entry = tar.getNextTarEntry()) != null) {
                         String entryName = entry.getName();
-                        String normalizedEntryName = entryName.replace('\\\\', '/');
-                        boolean isModulesEntry = normalizedizedModulesEntry(normalizedEntryName);
+                        String normalizedEntryName = entryName.replace('\\', '/');
+                        boolean isModulesEntry = normalizeModulesEntry(normalizedEntryName);
                         // Treat the extraction staging folder as the archive's parent root.
                         // Some JDK tar entries intentionally use one leading-directory
                         // traversal (for example lib/../../support/...). Resolve that
@@ -1387,9 +1387,9 @@ public class MainActivity extends ComponentActivity {
         }, "Jdk21-Extractor").start();
     }
 
-    private boolean normalizedizedModulesEntry(String entryName) {
+    private boolean normalizeModulesEntry(String entryName) {
         if (entryName == null) return false;
-        String value = entryName.replace('\\\\', '/');
+        String value = entryName.replace('\\', '/');
         while (value.startsWith("./")) value = value.substring(2);
         return value.equals("lib/modules") || value.endsWith("/lib/modules");
     }
